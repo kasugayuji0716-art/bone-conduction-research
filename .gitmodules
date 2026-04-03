@@ -1,0 +1,3 @@
+[submodule "gtcrn"]
+	path = gtcrn
+	url = https://github.com/Xiaobin-Rong/gtcrn.git
