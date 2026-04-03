@@ -18,12 +18,14 @@
 
 - **TAPS Dataset**: Korean paired throat mic + acoustic mic
   - HuggingFace: `yskim3271/Throat_and_Acoustic_Pairing_Speech_Dataset`
-  - **全体規模**: 60話者・6,000発話・15.3時間（train:4,000 / val:1,000 / test:1,000）
-  - フェーズ1で使用: テストセット50サンプル（話者p00のみ）
-  - `data/raw/taps/throat/` — 喉マイク音声（要再DL）
-  - `data/raw/taps/acoustic/` — 気導マイク音声（要再DL）
-  - `data/raw/taps/metadata.csv` — 正解テキスト（韓国語）
-  - 注意: 喉マイクは8kHz録音、気導マイクは16kHz録音（サンプルレート不一致あり）
+  - **全体規模**: 60話者・6,000発話・15.3時間（train:4,000 / dev:1,000 / test:1,000）
+    - 注意: HuggingFace上のsplit名は `validation` ではなく `dev`
+  - フェーズ1で使用: testセット50サンプル（話者p00のみ）
+  - `data/raw/taps/throat/{train,dev,test}/` — 喉マイク音声（ダウンロード済み・3.3GB）
+  - `data/raw/taps/acoustic/{train,dev,test}/` — 気導マイク音声（ダウンロード済み）
+  - `data/raw/taps/metadata_{train,dev,test}.csv` — split別メタデータ
+  - `data/raw/taps/metadata_all.csv` — 全split統合メタデータ
+  - 注意: 喉マイク・気導マイクともに16kHzで保存されている（データセット説明の「8kHz」は誤り、実測で確認済み）
 
 ---
 
@@ -62,7 +64,8 @@
 
 | スクリプト | 内容 | 出力 |
 |---|---|---|
-| 01_download_taps.py | TAPSデータ取得 | data/raw/taps/ |
+| 01_download_taps.py | TAPSデータ取得（test 50件のみ） | data/raw/taps/ |
+| 01b_download_taps_full.py | TAPS全split取得（train/dev/test 計6,000件） | data/raw/taps/{throat,acoustic}/{train,dev,test}/ |
 | 02_add_noise.py | ノイズ付加 | data/processed/noisy/ |
 | 03_apply_se.py | SE適用 | data/processed/se/ |
 | 05b_evaluate_gtcrn_noisy.py | 全34条件CER計測 | results/summary.csv |
@@ -103,7 +106,7 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 
 **メイン: 喉マイク特化SEモデルのファインチューニング**
 
-- TAPSの train split（40話者・4,000発話・10.2時間）を使用
+- TAPSの train split（40話者・4,000発話）を使用、dev split（1,000件）で学習中評価
 - GTCRNを「喉マイク入力 → 気導マイク出力」でファインチューニング
 - DNN用PCで学習（Chrome Remote Desktop経由）
 - GitHubでコードを共有
@@ -140,6 +143,7 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 
 - Python 3.13（macOS / DNN PC両対応）
 - `pip install faster-whisper jiwer soundfile scipy pystoi einops pesq python-pptx python-docx`
+- datasets は `<4.0`（3.x系）を使用すること — 4.x系はtorchcodecが必要でWSL2環境で動作しない
 - GTCRNはPyTorch `return_complex=True` API（旧APIは廃止済み）
 - pesqはPython3.13でコンパイルに `sudo xcodebuild -license accept` が必要（macOS）
 - DNN PC側はCUDA対応PyTorchを別途インストール
