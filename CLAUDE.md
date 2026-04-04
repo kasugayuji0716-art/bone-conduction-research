@@ -2,10 +2,10 @@
 
 ## 研究概要
 
-**テーマ**: 喉マイク（骨伝導マイク）音声に対するSpeech Enhancement（SE）がWhisperのCERに与える影響の定量的評価、および喉マイク特化SEモデルの開発
+**テーマ**: 喉マイク（骨伝導マイク）音声に対するSpeech Enhancement（SE）がWhisperのCERに与える影響の定量的評価、および喉マイク特化モデルの開発
 
 **フェーズ1 RQ**: 「どの条件でSEが喉マイク音声のASR（Whisper）性能を悪化させるか」
-**フェーズ2 RQ**: 「TAPSペアデータで特化ファインチューニングしたSEはCERを改善できるか」
+**フェーズ2 RQ（修正後）**: 「Whisper smallを喉マイク音声でファインチューニングするとCERは改善するか」
 
 **主要発見（フェーズ1）**:
 - DSP・GTCRNともに全ノイズ条件でCERが悪化する
@@ -19,13 +19,12 @@
 - **TAPS Dataset**: Korean paired throat mic + acoustic mic
   - HuggingFace: `yskim3271/Throat_and_Acoustic_Pairing_Speech_Dataset`
   - **全体規模**: 60話者・6,000発話・15.3時間（train:4,000 / dev:1,000 / test:1,000）
-    - 注意: HuggingFace上のsplit名は `validation` ではなく `dev`
+  - 注意: HuggingFace上のsplit名は `validation` ではなく `dev`
   - フェーズ1で使用: testセット50サンプル（話者p00のみ）
-  - `data/raw/taps/throat/{train,dev,test}/` — 喉マイク音声（ダウンロード済み・3.3GB）
-  - `data/raw/taps/acoustic/{train,dev,test}/` — 気導マイク音声（ダウンロード済み）
-  - `data/raw/taps/metadata_{train,dev,test}.csv` — split別メタデータ
-  - `data/raw/taps/metadata_all.csv` — 全split統合メタデータ
-  - 注意: 喉マイク・気導マイクともに16kHzで保存されている（データセット説明の「8kHz」は誤り、実測で確認済み）
+  - `data/raw/taps/throat/{train,dev,test}/` — 喉マイク音声（DNN PCにダウンロード済み）
+  - `data/raw/taps/acoustic/{train,dev,test}/` — 気導マイク音声（DNN PCにダウンロード済み）
+  - `data/raw/taps/metadata_{train,dev,test,all}.csv` — split別メタデータ
+  - 注意: 喉マイク・気導マイクともに16kHzで保存（データセット説明の「8kHz」は誤り、実測で確認済み）
 
 ---
 
@@ -77,6 +76,8 @@
 | 14_visualize_pesq_stoi_cer.py | PESQ/STOI/CER統合可視化 | results/figures/ |
 | 15_paper_asj_final.py | 日本音響学会フォーマット論文docx | results/paper_asj_final.docx |
 | 16_slides.py | 研究紹介スライド（25枚） | results/slides.pptx |
+| 20_finetune_gtcrn.py | GTCRNファインチューニング（失敗） | checkpoints/gtcrn_taps_finetuned.tar |
+| 21_evaluate_finetuned.py | ファインチューニング後CER評価 | results/phase2_cer.csv, phase2_comparison.csv |
 
 ---
 
@@ -102,30 +103,42 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 
 ---
 
-## 次のステップ（フェーズ2）
+## フェーズ2: GTCRNファインチューニング（失敗・方針転換）
 
-**メイン: 喉マイク特化SEモデルのファインチューニング**
+### 試みた内容
+- GTCRNを「喉マイク入力 → 気導マイク出力」で15エポック学習
+- train 4,000件 / dev 1,000件 / batch_size=4 / lr=1e-4
 
-- TAPSの train split（40話者・4,000発話）を使用、dev split（1,000件）で学習中評価
-- GTCRNを「喉マイク入力 → 気導マイク出力」でファインチューニング
-- DNN用PCで学習（Chrome Remote Desktop経由）
-- GitHubでコードを共有
-- 評価: ファインチューニング後モデルのCER・STOI・PESQをフェーズ1と比較
+### 失敗の原因
+1. **タスクのミスマッチ**: GTCRNは「ノイズを除去（スペクトルを削る）」モデル。喉マイクに存在しない高周波を生成する（逆方向の操作）には不適
+2. **損失が収束しない**: HybridLoss が97〜99で推移（正常時は1〜5程度）。喉・気導マイクのスペクトル差が大きすぎてmag MSEが巨大
+3. **出力が壊れた音声に**: 事前学習重みから引き離されたまま停止 → CER≈1.0（完全に聞き取れない音声）
 
-**サブ候補（優先度低）**
-- Whisper large-v3 での再評価（ASRモデル依存性の検証）
-- DSPパラメータ感度分析（HPFカットオフ 100/200/300/500Hz）
+### 結果
+```
+condition              CER
+baseline_throat        0.269
+gtcrn/clean (original) 0.296
+gtcrn/clean (ft)       1.051  ← 大幅悪化
+```
+
+### 方針転換: Whisperのファインチューニング
+「音声を修正する」ではなく「ASRモデルを喉マイクに慣れさせる」アプローチへ変更
+
+- **入力**: 喉マイク音声（throat/train, 4,000件）
+- **教師ラベル**: 韓国語テキスト（metadata_train.csv）
+- **モデル**: Whisper small（openai/whisper-small）
+- **期待効果**: ドメインミスマッチの解消によるCER直接改善
+- **比較**: フェーズ1のbaseline_throat CER=0.269 を下回れるか
 
 ---
 
 ## Git / GitHub
 
-- ローカルgit初期化済み（main ブランチ）
-- `gtcrn/` はサブモジュール（`git submodule update --init` で取得）
+- GitHubリポジトリ: `https://github.com/kasugayuji0716-art/bone-conduction-research`
+- `gtcrn/` はサブモジュール → クローン時は `git clone --recurse-submodules <URL>`
 - `.gitignore` で除外済み: `data/raw/throat・acoustic/`・`data/processed/`・`venv/`
-- GitHubリポジトリ: **未作成（ユーザーが手動作成してpush予定）**
-  - 作成後: `git remote add origin <URL> && git push -u origin main`
-  - DNN PC側: `git clone --recurse-submodules <URL>`
+- DNN PC（dl-box3, ~/kasuga/）にクローン・環境構築済み
 
 ---
 
@@ -141,9 +154,10 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 
 ## 環境メモ
 
-- Python 3.13（macOS / DNN PC両対応）
+- **macOS（開発・執筆用）**: Python 3.13
+- **DNN PC (dl-box3, Linux)**: TITAN RTX × 2（各24GB VRAM）、CUDA 13.1
 - `pip install faster-whisper jiwer soundfile scipy pystoi einops pesq python-pptx python-docx`
-- datasets は `<4.0`（3.x系）を使用すること — 4.x系はtorchcodecが必要でWSL2環境で動作しない
+- `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`（DNN PC）
+- datasets は `<4.0`（3.x系）を使用 — 4.x系はtorchcodecが必要で動作しない
 - GTCRNはPyTorch `return_complex=True` API（旧APIは廃止済み）
 - pesqはPython3.13でコンパイルに `sudo xcodebuild -license accept` が必要（macOS）
-- DNN PC側はCUDA対応PyTorchを別途インストール
