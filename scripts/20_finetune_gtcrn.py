@@ -117,13 +117,20 @@ class TAPSDataset(Dataset):
 
 
 # ─── STFT / iSTFT ───────────────────────────────────────
+def rms_normalize(wav, eps=1e-8):
+    """(B, L) → RMS=1 に正規化。スケールも返す"""
+    rms = wav.pow(2).mean(dim=-1, keepdim=True).sqrt().clamp(min=eps)
+    return wav / rms, rms
+
 def make_stft(wav, device):
     """wav: (B, L) → stft: (B, F, T, 2)"""
     window = torch.hann_window(WIN).pow(0.5).to(device)
     B = wav.shape[0]
     specs = []
     for i in range(B):
-        s = torch.stft(wav[i], N_FFT, HOP, WIN, window, return_complex=False)
+        s = torch.view_as_real(
+            torch.stft(wav[i], N_FFT, HOP, WIN, window, return_complex=True)
+        )
         specs.append(s)
     return torch.stack(specs, dim=0)  # (B, F, T, 2)
 
@@ -139,6 +146,10 @@ def run_epoch(model, loader, loss_fn, optimizer, device, train: bool):
         for throat, acoustic in loader:
             throat   = throat.to(device)
             acoustic = acoustic.to(device)
+
+            # RMS正規化: 音量差を除去してスペクトル形状の変換だけを学習
+            throat,  _ = rms_normalize(throat)
+            acoustic, _ = rms_normalize(acoustic)
 
             noisy_stft = make_stft(throat,   device)  # (B,F,T,2)
             clean_stft = make_stft(acoustic, device)  # (B,F,T,2)

@@ -1,0 +1,5 @@
+condition,phase1_cer,phase2_cer
+baseline_acoustic,0.131,-
+baseline_throat,0.269,0.2687
+gtcrn/clean (orig),0.296,0.2915
+gtcrn/clean (ft),-,1.0509
