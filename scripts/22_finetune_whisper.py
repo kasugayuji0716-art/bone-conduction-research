@@ -171,7 +171,7 @@ def main():
         data_collator=collator,
         compute_metrics=make_compute_metrics(processor),
         callbacks=[EarlyStoppingCallback(early_stopping_patience=args.patience)],
-        tokenizer=processor.feature_extractor,
+        processing_class=processor.feature_extractor,
     )
 
     trainer.train()
