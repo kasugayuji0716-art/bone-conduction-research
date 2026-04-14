@@ -1051,9 +1051,9 @@ def s23_phase2_result(prs):
     add_rect(sl, Inches(0.4), Inches(1.55), Inches(5.9), Inches(2.5), RGBColor(0xE3,0xF2,0xFD))
     txbox(sl, '未学習 Whisper small', Inches(0.5), Inches(1.65), Inches(5.7), Inches(0.45),
           size=14, color=C_NAVY, bold=True, align=PP_ALIGN.CENTER)
-    txbox(sl, 'CER  0.269', Inches(0.5), Inches(2.1), Inches(5.7), Inches(0.8),
+    txbox(sl, 'CER  0.544', Inches(0.5), Inches(2.1), Inches(5.7), Inches(0.8),
           size=32, bold=True, color=C_RED, align=PP_ALIGN.CENTER)
-    txbox(sl, '（フェーズ1 ベースライン）', Inches(0.5), Inches(2.9), Inches(5.7), Inches(0.4),
+    txbox(sl, '（10話者・1,000発話 平均）', Inches(0.5), Inches(2.9), Inches(5.7), Inches(0.4),
           size=12, color=C_GRAY, align=PP_ALIGN.CENTER)
 
     txbox(sl, '→', Inches(6.4), Inches(2.3), Inches(0.9), Inches(0.8),
@@ -1062,9 +1062,9 @@ def s23_phase2_result(prs):
     add_rect(sl, Inches(7.4), Inches(1.55), Inches(5.5), Inches(2.5), RGBColor(0xE8,0xF5,0xE9))
     txbox(sl, 'FT済み Whisper small', Inches(7.5), Inches(1.65), Inches(5.3), Inches(0.45),
           size=14, color=C_GREEN, bold=True, align=PP_ALIGN.CENTER)
-    txbox(sl, 'CER  0.095', Inches(7.5), Inches(2.1), Inches(5.3), Inches(0.8),
+    txbox(sl, 'CER  0.150', Inches(7.5), Inches(2.1), Inches(5.3), Inches(0.8),
           size=32, bold=True, color=C_GREEN, align=PP_ALIGN.CENTER)
-    txbox(sl, '64.6% 改善', Inches(7.5), Inches(2.9), Inches(5.3), Inches(0.4),
+    txbox(sl, '72.4% 改善', Inches(7.5), Inches(2.9), Inches(5.3), Inches(0.4),
           size=16, bold=True, color=C_GREEN, align=PP_ALIGN.CENTER)
 
     # 学習設定
@@ -1088,8 +1088,8 @@ def s23b_2x2(prs):
     # 2x2 テーブル
     cols = ['', 'No SE', 'GTCRN SE']
     rows = [
-        ['未学習 Whisper', '0.269  [A]', '0.296  [B]  (+0.027)'],
-        ['FT済み Whisper', '0.095  [C]', '0.1015 [D]  (+0.007)'],
+        ['未学習 Whisper', '0.544  [A]', '0.635  [B]  (+0.091)'],
+        ['FT済み Whisper', '0.150  [C]', '0.186  [D]  (+0.036)'],
     ]
     col_x = [Inches(0.4), Inches(3.5), Inches(8.0)]
     col_w = [Inches(3.0), Inches(4.3), Inches(4.5)]
@@ -1123,7 +1123,7 @@ def s23b_2x2(prs):
     # 矢印と解説
     txbox(sl, '▼ SE悪化幅', Inches(8.15), Inches(2.55), Inches(4.3), Inches(0.35),
           size=12, color=C_GRAY, align=PP_ALIGN.CENTER)
-    txbox(sl, '+0.027 → +0.007 に縮小',
+    txbox(sl, '+0.091 → +0.036 に縮小',
           Inches(8.0), Inches(4.5), Inches(5.0), Inches(0.5),
           size=16, bold=True, color=C_GREEN, align=PP_ALIGN.LEFT)
 
@@ -1146,8 +1146,8 @@ def s24_conclusion(prs):
         ('（1）', 'DSP-onlyおよびGTCRNは全ノイズ条件でCERを有意に悪化させる（30検定中26件 p<0.05）', C_RED),
         ('（2）', 'GTCRNはSTOI・PESQを改善しながらCERを悪化させる三重パラドックスが全ノイズ条件で観測された', C_ORANGE),
         ('（3）', 'DSP-onlyは3指標すべてを悪化させ、喉マイクには不適切な前処理である', C_ORANGE),
-        ('（4）', 'Whisper smallのFTによりCERが0.269→0.095（64.6%改善）—「ASR側の適応」が音声処理より有効', C_GREEN),
-        ('（5）', 'FT後もSEの逆効果は残存するが悪化幅は縮小（+0.027→+0.007）—FTがSEアーティファクトへの感受性を低減', C_GREEN),
+        ('（4）', 'Whisper FTによりCERが0.544→0.150（72.4%改善，10話者）—全話者で一貫した改善を確認', C_GREEN),
+        ('（5）', 'FT後もSEの逆効果は残存するが悪化幅は縮小（+0.091→+0.036）—FTがSEアーティファクト感受性を低減', C_GREEN),
     ]):
         y = Inches(1.65) + i * Inches(0.77)
         add_rect(sl, Inches(0.4), y, Inches(12.5), Inches(0.68), C_LIGHT)

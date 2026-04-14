@@ -21,6 +21,8 @@ SUMMARY    = os.path.join(BASE_DIR, 'results', 'summary.csv')
 STOI_CSV   = os.path.join(BASE_DIR, 'results', 'stoi_results.csv')
 PESQ_CSV   = os.path.join(BASE_DIR, 'results', 'pesq_results.csv')
 WFT_CSV    = os.path.join(BASE_DIR, 'results', 'phase2_whisper_summary.csv')
+MS_SUM_CSV = os.path.join(BASE_DIR, 'results', 'multispeaker_summary.csv')
+MS_SPK_CSV = os.path.join(BASE_DIR, 'results', 'multispeaker_per_speaker.csv')
 OUT_DOCX   = os.path.join(BASE_DIR, 'results', 'paper_asj_final.docx')
 
 # ── データ ───────────────────────────────────────────────────
@@ -28,7 +30,12 @@ def load():
     def rd(path, key='condition'):
         with open(path, encoding='utf-8') as f:
             return {r[key]: r for r in csv.DictReader(f)}
-    return rd(SUMMARY), rd(STOI_CSV), rd(PESQ_CSV), rd(WFT_CSV)
+    def rd2(path, key):
+        with open(path, encoding='utf-8') as f:
+            return {r[key]: r for r in csv.DictReader(f)}
+    ms_sum = rd(MS_SUM_CSV)
+    ms_spk = rd2(MS_SPK_CSV, 'speaker_id')
+    return rd(SUMMARY), rd(STOI_CSV), rd(PESQ_CSV), rd(WFT_CSV), ms_sum, ms_spk
 
 def v(d, key, field):
     return float(d[key][field]) if key in d else None
@@ -230,7 +237,15 @@ def add_fig(doc, buf, w_cm, cap):
 
 # ── メイン ───────────────────────────────────────────────────
 def main():
-    cer, stoi, pesq, wft = load()
+    cer, stoi, pesq, wft, ms_sum, ms_spk = load()
+    # 全話者集計値
+    ms_A = float(ms_sum['A_pretrained_no_se']['cer_mean'])
+    ms_B = float(ms_sum['B_pretrained_gtcrn']['cer_mean'])
+    ms_C = float(ms_sum['C_finetuned_no_se']['cer_mean'])
+    ms_D = float(ms_sum['D_finetuned_gtcrn']['cer_mean'])
+    ms_ft_improve = (ms_A - ms_C) / ms_A * 100  # 72.4%
+    ms_se_harm_pre = ms_B - ms_A   # +0.091
+    ms_se_harm_ft  = ms_D - ms_C   # +0.036
 
     doc = Document()
     sec = doc.sections[0]
@@ -281,8 +296,9 @@ def main():
         '全ノイズ条件でCERが有意に悪化し（30検定中26件 p<0.05），'
         'STOI・PESQとCERの一貫した逆行が観測された．'
         'この現象はOchiaiら [2] のアーティファクト誤差フレームワークで説明できる．'
-        '一方，ASRモデル自体のドメイン適応（Whisper small FT）により'
-        'CERは0.269→0.095（64.6%改善）となり，FT後のSE悪化幅も縮小（+0.027→+0.007）した．'
+        '一方，ASRモデル自体のドメイン適応（Whisper small FT）により，'
+        f'10話者・1,000発話の評価でCERが{ms_A:.3f}→{ms_C:.3f}（{ms_ft_improve:.1f}%改善）となり，'
+        f'FT後のSE悪化幅も{ms_se_harm_pre:+.3f}から{ms_se_harm_ft:+.3f}へ縮小した．'
         '知覚品質指標によるSE評価は喉マイクASR性能を予測しないことを定量的に示す．'
     )
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
@@ -390,24 +406,26 @@ def main():
         '学習設定はepochs=20（early stopping，best at epoch 3），'
         'batch_size=16，lr=1e-5，warmup_steps=500，fp16=Trueである．')
     body(doc,
-        '表2にテストセット（話者p00，50発話）における結果を示す．'
-        'ファインチューニング後のCERは0.095であり，'
-        '未学習時（0.269）から64.6%の改善が得られた．'
-        'これはSE適用時のCER悪化とは対照的な結果であり，'
-        '喉マイクASRの改善には音声処理よりも'
-        'ドメイン適応型ASR学習が有効であることを示す．')
+        f'表2にテストセット全10話者（1,000発話）における結果を示す．'
+        f'ファインチューニング後のCERは{ms_C:.4f}（平均）であり，'
+        f'未学習時（{ms_A:.4f}）から{ms_ft_improve:.1f}%の改善が得られた．'
+        '10話者すべてでFTが一貫してCERを改善しており（最小改善率67%，最大76%），'
+        'ドメイン適応効果の話者間安定性が示された．'
+        'これはSE適用時のCER悪化とは対照的であり，'
+        '喉マイクASRの改善には音声処理よりもドメイン適応型ASR学習が有効であることを示す．')
     body(doc,
-        '補足として，FT済みWhisperにGTCRN SEを組み合わせた場合（D条件）のCERは0.1015であった．'
-        'FT前の悪化幅（0.296−0.269=+0.027）と比較するとFT後は+0.007と縮小しており，'
+        f'補足として，FT済みWhisperにGTCRN SEを組み合わせた場合（D条件）のCERは{ms_D:.4f}であった．'
+        f'FT前の悪化幅（{ms_se_harm_pre:+.4f}）と比較するとFT後は{ms_se_harm_ft:+.4f}と縮小しており，'
         'ドメイン適応によりSEアーティファクトへの感受性が低減することが示唆される．'
         'ただしSEの逆効果は依然として残存するため，FT後もSEの適用は推奨されない．')
 
-    # フェーズ2結果表
+    # フェーズ2結果表（10話者・1,000発話）
     p2_rows = [
-        ['Condition',                    'CER (↓)',  'Improvement'],
-        ['Whisper small (pretrained)',   '0.269',    '—'],
-        ['Whisper small (fine-tuned)',   '0.095',    '-64.6%'],
-        ['Acoustic mic (reference)',     '0.131',    '—'],
+        ['Condition',                         'CER (↓)',          'Improvement'],
+        ['Whisper small (pretrained, 10spk)', f'{ms_A:.4f}',       '—'],
+        ['Whisper small (fine-tuned,  10spk)', f'{ms_C:.4f}',      f'-{ms_ft_improve:.1f}%'],
+        ['  → p00 only  (pretrained)',         '0.308',            '—'],
+        ['  → p00 only  (fine-tuned)',         '0.095',            '-69.1%'],
     ]
     fig2, ax2 = plt.subplots(figsize=(4.2, 1.8))
     ax2.axis('off')
@@ -419,9 +437,9 @@ def main():
         if r == 0:
             cell.set_facecolor('#1a237e')
             cell.set_text_props(color='white', fontweight='bold')
-        elif r == 2 and c == 1:
+        elif r in (2, 4) and c == 1:
             cell.set_facecolor('#c8e6c9')
-        elif r == 2 and c == 2:
+        elif r in (2, 4) and c == 2:
             cell.set_facecolor('#c8e6c9')
     fig2.tight_layout(pad=0.3)
     buf2 = BytesIO(); fig2.savefig(buf2, format='png', dpi=180, bbox_inches='tight')
@@ -464,9 +482,9 @@ def main():
         '（26/30条件，p<0.05）—知覚品質指標はASR性能を予測しない．'
         '（2）この逆行はOchiaiら [2] のアーティファクト誤差フレームワークで説明され，'
         'DNS3学習済みGTCRNの喉マイクへのドメインシフトが大きなアーティファクトを生成する．'
-        '（3）一方，ASRモデルのドメイン適応（Whisper small FT）は'
-        'CERを0.269→0.095（64.6%改善）と根本的に解決し，'
-        'FT後はSEの悪影響も縮小（+0.027→+0.007）した．'
+        f'（3）一方，ASRモデルのドメイン適応（Whisper small FT）は'
+        f'CERを{ms_A:.3f}→{ms_C:.3f}（{ms_ft_improve:.1f}%改善，10話者・1,000発話）と根本的に解決し，'
+        f'FT後はSEの悪影響も縮小（{ms_se_harm_pre:+.3f}→{ms_se_harm_ft:+.3f}）した．'
         'これらの結果は，喉マイクASRの改善においてSEの知覚品質最適化よりも'
         'ASRドメイン適応が本質的に有効であることを示す．'
         '今後は複数話者評価による汎化性の検証およびWhisper large-v3でのFTを予定する．')

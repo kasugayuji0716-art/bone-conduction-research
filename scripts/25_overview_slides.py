@@ -179,7 +179,7 @@ def fig_paradox():
 def fig_ft_result():
     """Whisper FTの結果棒グラフ"""
     labels = ['Pretrained\nWhisper', 'Fine-tuned\nWhisper', 'Air mic\n(reference)']
-    values = [0.269, 0.095, 0.131]
+    values = [0.544, 0.150, 0.131]
     colors = ['#EF9A9A', '#A5D6A7', '#90CAF9']
     fig, ax = plt.subplots(figsize=(4.0, 2.8))
     bars = ax.bar(labels, values, color=colors, width=0.5, zorder=3)
@@ -188,7 +188,7 @@ def fig_ft_result():
                 f'{val:.3f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
     ax.annotate('', xy=(1, 0.105), xytext=(0, 0.259),
                 arrowprops=dict(arrowstyle='->', color='#2E7D32', lw=2.5))
-    ax.text(0.5, 0.19, '−64.6%', fontsize=13, color='#2E7D32',
+    ax.text(0.5, 0.30, '−72.4%', fontsize=13, color='#2E7D32',
             fontweight='bold', ha='center')
     ax.set_ylabel('CER (lower is better)', fontsize=10)
     ax.set_ylim(0, 0.35); ax.grid(axis='y', alpha=0.25, zorder=0)
@@ -202,8 +202,8 @@ def fig_2x2():
     fig, ax = plt.subplots(figsize=(4.5, 2.2))
     ax.axis('off')
     data = [['', 'No SE', 'GTCRN SE'],
-            ['Pretrained', '0.269', '0.296\n(+0.027)'],
-            ['Fine-tuned', '0.095', '0.1015\n(+0.007)']]
+            ['Pretrained', '0.544', '0.635\n(+0.091)'],
+            ['Fine-tuned', '0.150', '0.186\n(+0.036)']]
     tbl = ax.table(cellText=[r[1:] for r in data[1:]],
                    rowLabels=[r[0] for r in data[1:]],
                    colLabels=data[0][1:],
@@ -449,7 +449,7 @@ def s5_solution(prs):
           size=14, bold=True, color=C_NAVY)
     buf2 = fig_2x2()
     add_img(sl, buf2, Inches(6.8), Inches(2.05), 5.9)
-    txbox(sl, 'FT後もSEの逆効果は残るが悪影響は縮小（+0.027→+0.007）',
+    txbox(sl, 'FT後もSEの逆効果は残るが悪影響は縮小（+0.091→+0.036）',
           Inches(6.85), Inches(4.6), Inches(5.9), Inches(0.3),
           size=12, color=C_GRAY)
 
@@ -462,7 +462,7 @@ def s5_solution(prs):
     for i, (mark, text, col) in enumerate([
         ('①', 'STOI↑PESQ↑でもCERが悪化する逆行現象が喉マイクでも全ノイズ条件で一貫して観測された', C_RED),
         ('②', '知覚品質指標（STOI・PESQ）は喉マイクASR性能の指標として不適切', C_ORANGE),
-        ('③', 'Whisper FTでCER 64.6%改善（0.269→0.095）—音声処理よりASR適応が根本解決', C_GREEN),
+        ('③', 'Whisper FTでCER 72.4%改善（0.544→0.150，10話者）—音声処理よりASR適応が根本解決', C_GREEN),
     ]):
         y = Inches(5.6) + i * Inches(0.5)
         txbox(sl, mark, Inches(0.6), y, Inches(0.5), Inches(0.42),
