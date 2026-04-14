@@ -181,17 +181,17 @@ def fig_ft_result():
     labels = ['Pretrained\nWhisper', 'Fine-tuned\nWhisper', 'Air mic\n(reference)']
     values = [0.544, 0.150, 0.131]
     colors = ['#EF9A9A', '#A5D6A7', '#90CAF9']
-    fig, ax = plt.subplots(figsize=(4.0, 2.8))
+    fig, ax = plt.subplots(figsize=(5.0, 2.0))
     bars = ax.bar(labels, values, color=colors, width=0.5, zorder=3)
     for bar, val in zip(bars, values):
         ax.text(bar.get_x() + bar.get_width()/2, val + 0.005,
-                f'{val:.3f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
+                f'{val:.3f}', ha='center', va='bottom', fontsize=11, fontweight='bold')
     ax.annotate('', xy=(1, 0.105), xytext=(0, 0.259),
                 arrowprops=dict(arrowstyle='->', color='#2E7D32', lw=2.5))
-    ax.text(0.5, 0.30, '−72.4%', fontsize=13, color='#2E7D32',
+    ax.text(0.5, 0.58, '−72.4%', fontsize=12, color='#2E7D32',
             fontweight='bold', ha='center')
     ax.set_ylabel('CER (lower is better)', fontsize=10)
-    ax.set_ylim(0, 0.35); ax.grid(axis='y', alpha=0.25, zorder=0)
+    ax.set_ylim(0, 0.65); ax.grid(axis='y', alpha=0.25, zorder=0)
     fig.tight_layout(pad=0.4)
     buf = BytesIO(); fig.savefig(buf, format='png', dpi=160, bbox_inches='tight')
     plt.close(fig); buf.seek(0); return buf
@@ -436,31 +436,49 @@ def s5_mechanism(prs):
             spec_buf = BytesIO(_f.read())
         add_img(sl, spec_buf, Inches(0.3), Inches(1.45), 8.0)
 
-    # 右：解説
-    add_rect(sl, Inches(8.8), Inches(1.5), Inches(4.2), Inches(5.5), C_LRED)
-    txbox(sl, 'GTCRNが喉マイクに何をするか',
-          Inches(8.95), Inches(1.6), Inches(3.9), Inches(0.42),
-          size=15, bold=True, color=C_RED)
-    for i, (band, delta, desc) in enumerate([
-        ('0–0.5 kHz', '+1.6 dB', '低域にノイズ追加'),
-        ('1–4 kHz',   '−1〜2 dB', 'フォルマント帯域を削除'),
-        ('4–8 kHz',   '−12.7 dB', '高域を壊滅的に削除'),
-    ]):
-        y = Inches(2.15) + i * Inches(0.9)
-        add_rect(sl, Inches(8.95), y, Inches(3.9), Inches(0.8), C_WHITE)
-        txbox(sl, band, Inches(9.05), y+Inches(0.05), Inches(1.2), Inches(0.35),
-              size=12, bold=True, color=C_DARK)
-        txbox(sl, delta, Inches(10.25), y+Inches(0.05), Inches(1.4), Inches(0.35),
-              size=13, bold=True, color=C_RED)
-        txbox(sl, desc, Inches(9.05), y+Inches(0.45), Inches(3.7), Inches(0.3),
-              size=11, color=C_GRAY)
+    # 右：解説（グラフの読み方）
+    txbox(sl, 'パネル(B)の差分グラフを読む',
+          Inches(8.55), Inches(1.5), Inches(4.55), Inches(0.38),
+          size=13, bold=True, color=C_NAVY)
+    txbox(sl, '赤塗り＝GTCRN がエネルギー追加\n青塗り＝削除',
+          Inches(8.55), Inches(1.92), Inches(4.55), Inches(0.45),
+          size=12, color=C_GRAY)
 
-    add_rect(sl, Inches(8.8), Inches(5.3), Inches(4.2), Inches(1.5),
-             RGBColor(0xFF, 0xF9, 0xC4))
+    # 帯域カード（修正版）
+    items = [
+        ('0–50 Hz', '+15 dB', '極低域にアーティファクト', C_RED,
+         'ASR の音韻識別には無関係な帯域'),
+        ('1–4 kHz', '−1〜2 dB', 'フォルマント帯域を削減', C_ORANGE,
+         '母音・子音の聞き分けに必要な成分'),
+        ('4–8 kHz', '−12.7 dB', '高域を壊滅的に削除', C_RED,
+         '喉マイクで既に欠落→さらに除去'),
+    ]
+    for i, (band, delta, title, col, sub) in enumerate(items):
+        y = Inches(2.5) + i * Inches(1.1)
+        add_rect(sl, Inches(8.55), y, Inches(4.55), Inches(1.0),
+                 RGBColor(0xF5, 0xF5, 0xF5))
+        txbox(sl, band,  Inches(8.65), y+Inches(0.05), Inches(1.1), Inches(0.32),
+              size=11, bold=True, color=C_DARK)
+        txbox(sl, delta, Inches(9.75), y+Inches(0.05), Inches(1.2), Inches(0.32),
+              size=13, bold=True, color=col)
+        txbox(sl, title, Inches(8.65), y+Inches(0.38), Inches(4.3), Inches(0.28),
+              size=11, bold=True, color=col)
+        txbox(sl, sub,   Inches(8.65), y+Inches(0.66), Inches(4.3), Inches(0.28),
+              size=10, color=C_GRAY)
+
+    # 結論ボックス
+    add_rect(sl, Inches(8.55), Inches(5.9), Inches(4.55), Inches(1.3),
+             RGBColor(0xFF, 0xEB, 0xEE))
+    txbox(sl, '本質的な問題',
+          Inches(8.7), Inches(5.95), Inches(4.2), Inches(0.32),
+          size=12, bold=True, color=C_RED)
     txbox(sl,
-          '喉マイクは元々\n高域が欠落している\n↓\nGTCRNがさらに除去\n= 逆方向の操作',
-          Inches(8.95), Inches(5.35), Inches(3.9), Inches(1.35),
-          size=13, bold=False, color=C_NAVY)
+          '喉マイクは元々 2 kHz 以上が欠落。\n'
+          'GTCRN はそれを「ノイズ」と誤判定し\n'
+          'さらに削除 → 逆方向の動作。\n'
+          'STOI・PESQ はこの歪みを検出できない。',
+          Inches(8.7), Inches(6.3), Inches(4.2), Inches(0.85),
+          size=11, color=C_NAVY)
 
 
 def s6_solution(prs):
@@ -478,7 +496,7 @@ def s6_solution(prs):
           Inches(0.6), Inches(2.05), Inches(5.6), Inches(0.55),
           size=13, color=C_DARK)
     buf = fig_ft_result()
-    add_img(sl, buf, Inches(0.5), Inches(2.7), 5.5)
+    add_img(sl, buf, Inches(0.5), Inches(2.65), 5.3)
 
     # 右上：2×2表
     add_rect(sl, Inches(6.7), Inches(1.45), Inches(6.2), Inches(3.5), C_LIGHT)
@@ -509,6 +527,84 @@ def s6_solution(prs):
               size=14, color=C_DARK)
 
 
+def s7_future(prs):
+    sl = blank_slide(prs)
+    add_title_bar(sl, '本研究の新規性・限界・今後の展望', n=7)
+
+    # ── 左列：新規性 ──────────────────────────────────────────
+    add_rect(sl, Inches(0.3), Inches(1.45), Inches(4.1), Inches(5.7),
+             RGBColor(0xE8, 0xF5, 0xE9))
+    txbox(sl, '本研究の新規性',
+          Inches(0.45), Inches(1.55), Inches(3.8), Inches(0.38),
+          size=14, bold=True, color=C_GREEN)
+    novelty = [
+        ('喉マイク特有のドメインで\nSE逆効果を系統的に実証',
+         'Ochiai・Mawalim は気導マイク対象。\n高周波が構造的に欠落したドメインでの\n検証は本研究が初。'),
+        ('三重パラドックスの定量化',
+         'STOI↑PESQ↑CER↑が全ノイズ条件で\n一貫することを30条件・統計検定で示した。'),
+        ('スペクトル分析による\nメカニズムの可視化',
+         '4–8 kHz での −12.7 dB 削除という\n具体的な原因を実測で特定。'),
+    ]
+    for i, (title, detail) in enumerate(novelty):
+        y = Inches(2.05) + i * Inches(1.65)
+        add_rect(sl, Inches(0.45), y, Inches(3.8), Inches(1.5),
+                 RGBColor(0xC8, 0xE6, 0xC9))
+        txbox(sl, f'● {title}', Inches(0.55), y+Inches(0.05),
+              Inches(3.6), Inches(0.55), size=12, bold=True, color=C_GREEN)
+        txbox(sl, detail, Inches(0.55), y+Inches(0.62),
+              Inches(3.6), Inches(0.8), size=11, color=C_DARK)
+
+    # ── 中列：限界 ────────────────────────────────────────────
+    add_rect(sl, Inches(4.6), Inches(1.45), Inches(4.1), Inches(5.7),
+             RGBColor(0xFF, 0xF9, 0xC4))
+    txbox(sl, '現状の限界',
+          Inches(4.75), Inches(1.55), Inches(3.8), Inches(0.38),
+          size=14, bold=True, color=C_ORANGE)
+    limits = [
+        ('既存モデルの組み合わせ',
+         'GTCRN も Whisper も既存モデルの\n適用のみ。SE の喉マイク向け\n再設計はしていない。'),
+        ('韓国語・単一データセット',
+         'TAPS のみ使用。他言語・他データへの\n汎化性は未検証。'),
+        ('クリーン条件でのFT',
+         'FT はクリーン音声のみ。\nノイズ下での頑健性評価が不足。'),
+        ('音素レベルの分析なし',
+         'どの音素が特に誤認識されるかの\n詳細分析は未実施。'),
+    ]
+    for i, (title, detail) in enumerate(limits):
+        y = Inches(2.05) + i * Inches(1.22)
+        add_rect(sl, Inches(4.75), y, Inches(3.8), Inches(1.1),
+                 RGBColor(0xFF, 0xF0, 0xB0))
+        txbox(sl, f'▲ {title}', Inches(4.85), y+Inches(0.05),
+              Inches(3.6), Inches(0.32), size=12, bold=True, color=C_ORANGE)
+        txbox(sl, detail, Inches(4.85), y+Inches(0.4),
+              Inches(3.6), Inches(0.65), size=11, color=C_DARK)
+
+    # ── 右列：展望 ────────────────────────────────────────────
+    add_rect(sl, Inches(8.9), Inches(1.45), Inches(4.1), Inches(5.7),
+             C_LBLUE)
+    txbox(sl, '今後の展望',
+          Inches(9.05), Inches(1.55), Inches(3.8), Inches(0.38),
+          size=14, bold=True, color=C_NAVY)
+    futures = [
+        ('ドメイン適合型 SE の開発',
+         'TAPS で学習した SE-conformer\n（Kim et al. 2025）との組み合わせ。\nFT × 適合型SE で CER がどこまで下がるか。'),
+        ('ノイズ下での FT 評価',
+         '実環境ノイズ（MUSAN・DEMAND）を\n使った頑健な学習と評価。'),
+        ('音素誤認識の分析',
+         '喉マイクで特に苦手な音素を特定し\nデータ収集・学習戦略に活かす。'),
+        ('Whisper large-v3 との比較',
+         'モデルサイズとドメイン適応効果\nのトレードオフを定量化。'),
+    ]
+    for i, (title, detail) in enumerate(futures):
+        y = Inches(2.05) + i * Inches(1.22)
+        add_rect(sl, Inches(9.05), y, Inches(3.8), Inches(1.1),
+                 RGBColor(0xBB, 0xDE, 0xFB))
+        txbox(sl, f'→ {title}', Inches(9.15), y+Inches(0.05),
+              Inches(3.6), Inches(0.32), size=12, bold=True, color=C_NAVY)
+        txbox(sl, detail, Inches(9.15), y+Inches(0.4),
+              Inches(3.6), Inches(0.65), size=11, color=C_DARK)
+
+
 # ── メイン ───────────────────────────────────────────────────
 def main():
     prs = new_prs()
@@ -519,8 +615,9 @@ def main():
     s4_paradox(prs)
     s5_mechanism(prs)
     s6_solution(prs)
+    s7_future(prs)
     prs.save(OUT_PPTX)
-    print(f'完了: {OUT_PPTX}  (6枚)')
+    print(f'完了: {OUT_PPTX}  (7枚)')
 
 
 if __name__ == '__main__':
