@@ -1017,18 +1017,82 @@ def s21_summary_results(prs):
               Inches(12.1), Inches(0.75), size=13, color=C_DARK)
     add_footer(sl, 21)
 
-def s22_conclusion(prs):
+def s22_phase2_approach(prs):
+    sl = blank_slide(prs)
+    add_title_bar(sl, 'フェーズ2：アプローチの転換')
+    txbox(sl, 'なぜSEではなくASR再学習か？',
+          Inches(0.4), Inches(1.5), Inches(12.5), Inches(0.5),
+          size=20, bold=True, color=C_NAVY)
+
+    for i, (label, detail, col, bad) in enumerate([
+        ('SEによる音声変換（フェーズ2-試行）',
+         'GTCRNを「喉マイク→気導マイク変換」にFT\n→ 存在しない高周波を生成することはできない\n→ Loss収束せず、CER≈1.0で失敗',
+         RGBColor(0xFF,0xEB,0xEE), True),
+        ('ASRモデルのドメイン適応（採用）',
+         'Whisper smallをTAPS喉マイク音声でFT（4,000発話・10時間）\n→ 「喉マイクの音響特性」をASR側が直接学習\n→ CER 0.269 → 0.095（64.6%改善）',
+         RGBColor(0xE8,0xF5,0xE9), False),
+    ]):
+        y = Inches(2.2) + i * Inches(2.1)
+        add_rect(sl, Inches(0.4), y, Inches(12.5), Inches(1.85), col)
+        mark = '✗  ' if bad else '✓  '
+        mc = C_RED if bad else C_GREEN
+        txbox(sl, mark + label, Inches(0.55), y+Inches(0.1), Inches(12.0), Inches(0.45),
+              size=16, bold=True, color=mc)
+        txbox(sl, detail, Inches(0.7), y+Inches(0.6), Inches(12.0), Inches(1.1),
+              size=13, color=C_DARK)
+    add_footer(sl, 22)
+
+
+def s23_phase2_result(prs):
+    sl = blank_slide(prs)
+    add_title_bar(sl, 'フェーズ2：Whisperファインチューニング結果')
+
+    # 大きな数値表示
+    add_rect(sl, Inches(0.4), Inches(1.55), Inches(5.9), Inches(2.5), RGBColor(0xE3,0xF2,0xFD))
+    txbox(sl, '未学習 Whisper small', Inches(0.5), Inches(1.65), Inches(5.7), Inches(0.45),
+          size=14, color=C_NAVY, bold=True, align=PP_ALIGN.CENTER)
+    txbox(sl, 'CER  0.269', Inches(0.5), Inches(2.1), Inches(5.7), Inches(0.8),
+          size=32, bold=True, color=C_RED, align=PP_ALIGN.CENTER)
+    txbox(sl, '（フェーズ1 ベースライン）', Inches(0.5), Inches(2.9), Inches(5.7), Inches(0.4),
+          size=12, color=C_GRAY, align=PP_ALIGN.CENTER)
+
+    txbox(sl, '→', Inches(6.4), Inches(2.3), Inches(0.9), Inches(0.8),
+          size=36, bold=True, color=C_NAVY, align=PP_ALIGN.CENTER)
+
+    add_rect(sl, Inches(7.4), Inches(1.55), Inches(5.5), Inches(2.5), RGBColor(0xE8,0xF5,0xE9))
+    txbox(sl, 'FT済み Whisper small', Inches(7.5), Inches(1.65), Inches(5.3), Inches(0.45),
+          size=14, color=C_GREEN, bold=True, align=PP_ALIGN.CENTER)
+    txbox(sl, 'CER  0.095', Inches(7.5), Inches(2.1), Inches(5.3), Inches(0.8),
+          size=32, bold=True, color=C_GREEN, align=PP_ALIGN.CENTER)
+    txbox(sl, '64.6% 改善', Inches(7.5), Inches(2.9), Inches(5.3), Inches(0.4),
+          size=16, bold=True, color=C_GREEN, align=PP_ALIGN.CENTER)
+
+    # 学習設定
+    add_rect(sl, Inches(0.4), Inches(4.25), Inches(12.5), Inches(1.0), C_LIGHT)
+    txbox(sl, '学習設定：train 4,000発話 / epochs=20（early stop, best=epoch3）/ batch=16 / lr=1e-5 / fp16',
+          Inches(0.55), Inches(4.4), Inches(12.2), Inches(0.5),
+          size=13, color=C_DARK)
+
+    # メッセージ
+    add_rect(sl, Inches(0.4), Inches(5.45), Inches(12.5), Inches(0.8), RGBColor(0xFF,0xF9,0xC4))
+    txbox(sl, '「音声を直す」より「ASRを慣れさせる」方が喉マイクには効果的',
+          Inches(0.55), Inches(5.55), Inches(12.2), Inches(0.5),
+          size=17, bold=True, color=C_NAVY, align=PP_ALIGN.CENTER)
+    add_footer(sl, 23)
+
+
+def s24_conclusion(prs):
     sl = blank_slide(prs)
     add_title_bar(sl, 'まとめ')
     txbox(sl,
-          '喉マイク音声に対するSEの効果を、CER・STOI・PESQ・統計検定を用いて34条件で定量評価した。',
+          '喉マイク音声に対するSEの効果と、ASRモデルのドメイン適応効果を定量評価した。',
           Inches(0.4), Inches(1.6), Inches(12.5), Inches(0.55),
           size=17, color=C_DARK)
     for i, (mark, text, col) in enumerate([
         ('（1）', 'DSP-onlyおよびGTCRNは全ノイズ条件でCERを有意に悪化させる（30検定中26件 p<0.05）', C_RED),
         ('（2）', 'GTCRNはSTOI・PESQを改善しながらCERを悪化させる三重パラドックスが全ノイズ条件で観測された', C_ORANGE),
         ('（3）', 'DSP-onlyは3指標すべてを悪化させ、喉マイクには不適切な前処理である', C_ORANGE),
-        ('（4）', 'ASRを目的とするSE評価では、STOI/PESQ等の知覚品質指標だけでなくCERによる直接評価が不可欠', C_NAVY),
+        ('（4）', 'Whisper smallのFTによりCERが0.269→0.095（64.6%改善）—「ASR側の適応」が音声処理より有効', C_GREEN),
     ]):
         y = Inches(2.3) + i * Inches(0.95)
         add_rect(sl, Inches(0.4), y, Inches(12.5), Inches(0.82), C_LIGHT)
@@ -1036,19 +1100,19 @@ def s22_conclusion(prs):
               Inches(0.8), Inches(0.45), size=15, bold=True, color=col)
         txbox(sl, text, Inches(1.25), y+Inches(0.16),
               Inches(11.4), Inches(0.45), size=15, color=C_DARK)
-    add_footer(sl, 22)
+    add_footer(sl, 24)
 
-def s23_future(prs):
+def s25_future(prs):
     sl = blank_slide(prs)
     add_title_bar(sl, '今後の展望')
     for i, (pri, title, items, col) in enumerate([
-        ('優先度：高', 'Whisper large-v3 での再評価',
-         ['現在の結論はWhisper smallに限定される可能性',
-          '同じ結論が出れば「モデルサイズに依存しない現象」として主張強化'],
+        ('優先度：高', 'Whisper large-v3 でのFTと比較',
+         ['smallとlargeでFT効果の差を比較',
+          'モデルサイズとドメイン適応効果の関係を明らかにする'],
          RGBColor(0xFF,0xEB,0xEE)),
-        ('優先度：中', 'DSPパラメータ感度分析',
-         ['HPFカットオフを100/200/300/500Hzで変化させて比較',
-          '300Hzという選択が恣意的という査読批判への回答'],
+        ('優先度：中', 'ノイズ条件下でのWhisper FT評価',
+         ['現在のFT評価はクリーン音声のみ',
+          'フェーズ1と同じSNR条件（白色・ピンクノイズ）でのCER比較'],
          RGBColor(0xFF,0xF8,0xE1)),
         ('優先度：中', '実環境ノイズでの検証',
          ['現在は人工ノイズ（白色・ピンク）のみ',
@@ -1065,9 +1129,9 @@ def s23_future(prs):
             txbox(sl, f'・ {item}',
                   Inches(0.7), y+Inches(0.88)+j*Inches(0.35), Inches(12.0), Inches(0.32),
                   size=13, color=C_DARK)
-    add_footer(sl, 23)
+    add_footer(sl, 25)
 
-def s24_refs(prs):
+def s26_refs(prs):
     sl = blank_slide(prs)
     add_title_bar(sl, '参考文献')
     refs = [
@@ -1092,9 +1156,9 @@ def s24_refs(prs):
                  RGBColor(0xF5,0xF5,0xF5))
         txbox(sl, ref, Inches(0.55), y+Inches(0.08), Inches(12.2), Inches(1.1),
               size=12, color=C_DARK)
-    add_footer(sl, 24)
+    add_footer(sl, 26)
 
-def s25_end(prs):
+def s27_end(prs):
     sl = blank_slide(prs)
     add_rect(sl, 0, 0, W, H, C_NAVY)
     add_rect(sl, 0, Inches(3.3), W, Inches(0.08), C_BLUE)
@@ -1109,7 +1173,7 @@ def s25_end(prs):
           'コード・データ：実験スクリプト一式（問い合わせ可）',
           Inches(0.6), Inches(5.0), Inches(12.1), Inches(0.9),
           size=14, color=RGBColor(0x90,0xCA,0xF9), align=PP_ALIGN.CENTER)
-    add_footer(sl, 25)
+    add_footer(sl, 27)
 
 
 # ── メイン ───────────────────────────────────────────────────
@@ -1139,10 +1203,12 @@ def main():
     s19_discussion2(prs)
     s20_discussion3(prs)
     s21_summary_results(prs)
-    s22_conclusion(prs)
-    s23_future(prs)
-    s24_refs(prs)
-    s25_end(prs)
+    s22_phase2_approach(prs)
+    s23_phase2_result(prs)
+    s24_conclusion(prs)
+    s25_future(prs)
+    s26_refs(prs)
+    s27_end(prs)
 
     prs.save(OUT_PPTX)
     print(f'完了: {OUT_PPTX}  ({len(prs.slides)}枚)')

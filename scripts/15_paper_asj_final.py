@@ -16,18 +16,19 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
-BASE_DIR = os.path.join(os.path.dirname(__file__), '..')
-SUMMARY  = os.path.join(BASE_DIR, 'results', 'summary.csv')
-STOI_CSV = os.path.join(BASE_DIR, 'results', 'stoi_results.csv')
-PESQ_CSV = os.path.join(BASE_DIR, 'results', 'pesq_results.csv')
-OUT_DOCX = os.path.join(BASE_DIR, 'results', 'paper_asj_final.docx')
+BASE_DIR   = os.path.join(os.path.dirname(__file__), '..')
+SUMMARY    = os.path.join(BASE_DIR, 'results', 'summary.csv')
+STOI_CSV   = os.path.join(BASE_DIR, 'results', 'stoi_results.csv')
+PESQ_CSV   = os.path.join(BASE_DIR, 'results', 'pesq_results.csv')
+WFT_CSV    = os.path.join(BASE_DIR, 'results', 'phase2_whisper_summary.csv')
+OUT_DOCX   = os.path.join(BASE_DIR, 'results', 'paper_asj_final.docx')
 
 # ── データ ───────────────────────────────────────────────────
 def load():
     def rd(path, key='condition'):
         with open(path, encoding='utf-8') as f:
             return {r[key]: r for r in csv.DictReader(f)}
-    return rd(SUMMARY), rd(STOI_CSV), rd(PESQ_CSV)
+    return rd(SUMMARY), rd(STOI_CSV), rd(PESQ_CSV), rd(WFT_CSV)
 
 def v(d, key, field):
     return float(d[key][field]) if key in d else None
@@ -229,7 +230,7 @@ def add_fig(doc, buf, w_cm, cap):
 
 # ── メイン ───────────────────────────────────────────────────
 def main():
-    cer, stoi, pesq = load()
+    cer, stoi, pesq, wft = load()
 
     doc = Document()
     sec = doc.sections[0]
@@ -280,6 +281,8 @@ def main():
         '全ノイズ条件においてSE適用後のCERが有意に悪化し（Wilcoxon検定，30検定中26件 p<0.05），'
         'GTCRNはSTOIおよびPESQを改善しながらCERを悪化させるという'
         '知覚品質とASR性能の乖離を示した．'
+        'さらに，Whisper smallをTAPSの喉マイク音声でファインチューニングすることで'
+        'CERが0.269から0.095へと64.6%改善することを確認した．'
     )
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p.paragraph_format.space_after = Pt(1)
@@ -372,6 +375,48 @@ def main():
     add_fig(doc, fig_metrics_table_img(cer, stoi, pesq), w_cm=7.5,
             cap='表1　代表条件のCER・STOI・PESQ（白色ノイズ）')
 
+    # 3.4 フェーズ2：Whisperファインチューニング
+    h2(doc, '3.4', 'Whisperファインチューニングの効果')
+    body(doc,
+        'SEによる音声変換ではなく，ASRモデル自体を喉マイクに適応させる'
+        'アプローチとして，Whisper smallをTAPSのtrain split'
+        '（40話者・4,000発話・10.2時間）を用いてファインチューニングした．'
+        '学習設定はepochs=20（early stopping，best at epoch 3），'
+        'batch_size=16，lr=1e-5，warmup_steps=500，fp16=Trueである．')
+    body(doc,
+        '表2にテストセット（話者p00，50発話）における結果を示す．'
+        'ファインチューニング後のCERは0.095であり，'
+        '未学習時（0.269）から64.6%の改善が得られた．'
+        'これはSE適用時のCER悪化とは対照的な結果であり，'
+        '喉マイクASRの改善には音声処理よりも'
+        'ドメイン適応型ASR学習が有効であることを示す．')
+
+    # フェーズ2結果表
+    p2_rows = [
+        ['Condition',                    'CER (↓)',  'Improvement'],
+        ['Whisper small (pretrained)',   '0.269',    '—'],
+        ['Whisper small (fine-tuned)',   '0.095',    '-64.6%'],
+        ['Acoustic mic (reference)',     '0.131',    '—'],
+    ]
+    fig2, ax2 = plt.subplots(figsize=(4.2, 1.8))
+    ax2.axis('off')
+    tbl2 = ax2.table(cellText=p2_rows[1:], colLabels=p2_rows[0],
+                     loc='center', cellLoc='center')
+    tbl2.auto_set_font_size(False); tbl2.set_fontsize(8.5); tbl2.scale(1, 1.4)
+    for (r, c), cell in tbl2.get_celld().items():
+        cell.set_edgecolor('#cccccc')
+        if r == 0:
+            cell.set_facecolor('#1a237e')
+            cell.set_text_props(color='white', fontweight='bold')
+        elif r == 2 and c == 1:
+            cell.set_facecolor('#c8e6c9')
+        elif r == 2 and c == 2:
+            cell.set_facecolor('#c8e6c9')
+    fig2.tight_layout(pad=0.3)
+    buf2 = BytesIO(); fig2.savefig(buf2, format='png', dpi=180, bbox_inches='tight')
+    plt.close(fig2); buf2.seek(0)
+    add_fig(doc, buf2, w_cm=7.5, cap='表2　Whisperファインチューニングの効果（テストセット話者p00）')
+
     # 4. 考察
     h1(doc, '4', '考察')
     body(doc,
@@ -395,14 +440,18 @@ def main():
     # 5. おわりに
     h1(doc, '5', 'おわりに')
     body(doc,
-        '喉マイク音声に対するSEの影響をCER・STOI・PESQの3指標で評価した結果，'
-        '以下を明らかにした．'
+        '喉マイク音声に対するSEの影響と，ASRモデルのドメイン適応の効果を'
+        'CER・STOI・PESQの3指標で評価した結果，以下を明らかにした．'
         '（1）DSP-onlyおよびGTCRNは全ノイズ条件でCERを有意に悪化させる'
         '（30検定中26件，p<0.05）．'
         '（2）GTCRNはSTOI・PESQを改善しながらCERを悪化させるという，'
         '知覚品質とASR性能の乖離が全ノイズ条件で一貫して観測される．'
         '（3）DSP-onlyは3指標すべてを悪化させ，喉マイクには不適切な前処理である．'
-        '今後はWhisper large-v3による再評価および喉マイク専用学習済みSEモデルとの比較を行う予定である．')
+        '（4）Whisper smallを喉マイク音声でファインチューニングすることで'
+        'CERが0.269から0.095へと64.6%改善し，'
+        'ASRモデルのドメイン適応が音声処理より有効であることを示した．'
+        '今後はWhisper large-v3でのファインチューニングや'
+        '実環境ノイズへの適用可能性を検討する予定である．')
 
     # 参考文献
     h1(doc, '', '参考文献')
