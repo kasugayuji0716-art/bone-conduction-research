@@ -276,13 +276,14 @@ def main():
         '骨伝導マイク（喉マイク）は高騒音環境での音声収音に有用だが，'
         '低域偏重・高周波欠落という独特の周波数特性を持ち，'
         '一般的なASRシステムでは高い文字誤り率（CER）が生じる．'
-        '本研究では，DSPベースおよびGTCRNニューラルSEを喉マイク音声に適用し，'
+        'SEがアーティファクト誤差を介してASRを悪化させることは一般ノイズ環境で報告されているが，'
+        '喉マイクというドメイン外入力条件での系統的検証はなされていない．'
+        '本研究では，DNS3学習済みGTCRN（ドメイン外SE）を喉マイク音声に適用し，'
         'Whisperを用いたCERへの影響をSTOI・PESQとあわせて34条件で定量評価した．'
-        '全ノイズ条件においてSE適用後のCERが有意に悪化し（Wilcoxon検定，30検定中26件 p<0.05），'
-        'GTCRNはSTOIおよびPESQを改善しながらCERを悪化させるという'
-        '知覚品質とASR性能の乖離を示した．'
-        'さらに，Whisper smallをTAPSの喉マイク音声でファインチューニングすることで'
-        'CERが0.269から0.095へと64.6%改善することを確認した．'
+        '全ノイズ条件においてSE後のCERが有意に悪化し（30検定中26件 p<0.05），'
+        'GTCRNはSTOI・PESQを改善しながらCERを悪化させる乖離が一貫して観測された．'
+        'またWhisper smallのドメイン適応FTによりCERが0.269→0.095（64.6%改善）となり，'
+        'FT後のSE悪化幅も+0.027から+0.007へ縮小した．'
     )
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p.paragraph_format.space_after = Pt(1)
@@ -305,15 +306,18 @@ def main():
         'しかしその音声は低域エネルギーが支配的で高周波成分が欠落するため，'
         '一般的なASRシステムでは高いCERが生じる．')
     body(doc,
-        '音声強調（SE）はASR前処理として広く用いられるが，'
-        'Mawalimら [1] は深層学習型SEが実環境ではASR性能を必ずしも改善しないことを示した．'
-        'またOchiaiら [2] はSEが導入するアーティファクト誤差が'
-        '残留ノイズよりもASRに有害であることを定量的に示している．'
-        'しかし喉マイクという特殊なドメインでの検証はこれまでなされていない．')
+        'SEはASR前処理として広く用いられるが，その有効性には疑問が呈されている．'
+        'Ochiaiら [2] はSEが生成するアーティファクト誤差が残留ノイズよりもASRに有害であることを'
+        '直交射影分解（OPD）により定量的に実証し，'
+        'Mawalimら [1] は最新DL-SEが実環境ではASRを改善しないことを確認した．'
+        'この逆効果現象は一般騒音環境・遠距離収音・無線通信音声など複数ドメインで報告されている．'
+        'しかし，高周波成分が欠落した喉マイクという極端なドメインシフト条件での系統的検証はなされていない．'
+        'TAPSデータセット [4] を用いたSE評価（Kimら [5]）ではドメイン適合型SEがCERを改善するが，'
+        'ドメイン外SEをノイズ条件下に適用した場合の挙動は未調査である．')
     body(doc,
-        '本稿では，DSP-onlyおよびGTCRN [3] によるSEが'
-        'Whisperの韓国語CERに与える影響を，STOI・PESQとあわせて'
-        '34条件で評価し，SE逆効果が生じる条件を特定することを目的とする．')
+        '本稿では，DNS3（気導マイク）学習済みのGTCRN [3] というドメイン外SEを'
+        'TAPS喉マイク音声に適用し，STOI・PESQとCERの同時測定を34条件で実施する．'
+        'さらにWhisperのドメイン適応（FT）がSEアーティファクトへの感受性に与える影響も検証する．')
 
     # 2. 実験設計
     h1(doc, '2', '実験設計')
@@ -390,6 +394,11 @@ def main():
         'これはSE適用時のCER悪化とは対照的な結果であり，'
         '喉マイクASRの改善には音声処理よりも'
         'ドメイン適応型ASR学習が有効であることを示す．')
+    body(doc,
+        '補足として，FT済みWhisperにGTCRN SEを組み合わせた場合（D条件）のCERは0.1015であった．'
+        'FT前の悪化幅（0.296−0.269=+0.027）と比較するとFT後は+0.007と縮小しており，'
+        'ドメイン適応によりSEアーティファクトへの感受性が低減することが示唆される．'
+        'ただしSEの逆効果は依然として残存するため，FT後もSEの適用は推奨されない．')
 
     # フェーズ2結果表
     p2_rows = [
@@ -421,12 +430,15 @@ def main():
     h1(doc, '4', '考察')
     body(doc,
         'GTCRNがSTOI・PESQを改善しながらCERを悪化させる現象は，'
-        'Ochiaiら [2] の枠組みで解釈すると，'
-        'SEが知覚的に自然な音声を生成しつつ'
-        'Whisperの学習分布と乖離したアーティファクト誤差を導入しているためと考えられる．'
-        'GTCRNはDNS3（気導マイク）で学習されており，'
-        '喉マイクの低域偏重スペクトルはドメイン外入力であるため'
-        '過剰な周波数操作が生じやすい．')
+        'Ochiaiら [2] のOPD枠組みで解釈できる．'
+        'GTCRNはDNS3（気導マイク・英語）で学習されており，'
+        '喉マイクの低域偏重スペクトルはドメイン外入力である．'
+        'このため非線形変換が大きなアーティファクト誤差を生じさせ，'
+        '多条件訓練されたASRモデルでも対処できない特徴空間の歪みを引き起こす．'
+        'なおTAPSのSE-conformer [5] はTAPSデータで学習したドメイン適合型SEであり'
+        'CER 84.4%→24.4%と改善する．'
+        '本結果との比較は「ドメイン適合型SEは有効，ドメイン外SEは逆効果」という'
+        '一貫した解釈を支持する．')
     body(doc,
         'DSP-onlyは300 Hzハイパスフィルタにより喉マイクの主要エネルギー帯域を除去し，'
         'STOI・PESQ・CERの三指標すべてを悪化させた．'
@@ -435,31 +447,36 @@ def main():
     body(doc,
         'SNR −5 dBでWilcoxon検定が有意差を示さなかった条件（ピンクノイズ）は，'
         '両条件ともCER≥1.0という天井効果によるものであり，'
-        'SE逆効果が消失したわけではない．')
+        'SE逆効果が消失したわけではない．'
+        'Whisper FT後にSEの悪影響が縮小した（+0.027→+0.007）ことは，'
+        'ドメイン適応がアーティファクト感受性を低減するというOchiaiらの'
+        'Observation Addingアプローチ [2] と方向性が一致する．')
 
     # 5. おわりに
     h1(doc, '5', 'おわりに')
     body(doc,
-        '喉マイク音声に対するSEの影響と，ASRモデルのドメイン適応の効果を'
-        'CER・STOI・PESQの3指標で評価した結果，以下を明らかにした．'
-        '（1）DSP-onlyおよびGTCRNは全ノイズ条件でCERを有意に悪化させる'
+        '本研究はOchiaiら [2] のアーティファクト誤差フレームワークを喉マイクドメインで検証し，'
+        '以下を明らかにした．'
+        '（1）ドメイン外SE（GTCRN/DNS3）は全ノイズ条件でCERを有意に悪化させる'
         '（30検定中26件，p<0.05）．'
-        '（2）GTCRNはSTOI・PESQを改善しながらCERを悪化させるという，'
-        '知覚品質とASR性能の乖離が全ノイズ条件で一貫して観測される．'
+        '（2）GTCRNはSTOI・PESQを改善しながらCERを悪化させる知覚品質とASR性能の乖離が'
+        '全ノイズ条件で一貫して観測された—Ochiaiらの枠組みを喉マイク域で実証．'
         '（3）DSP-onlyは3指標すべてを悪化させ，喉マイクには不適切な前処理である．'
-        '（4）Whisper smallを喉マイク音声でファインチューニングすることで'
-        'CERが0.269から0.095へと64.6%改善し，'
-        'ASRモデルのドメイン適応が音声処理より有効であることを示した．'
-        '今後はWhisper large-v3でのファインチューニングや'
-        '実環境ノイズへの適用可能性を検討する予定である．')
+        '（4）一方，ドメイン適合型SE（SE-conformer [5]）はCER 84.4%→24.4%と改善しており，'
+        '「ドメイン外SEが逆効果」という本結果と整合する．'
+        '（5）Whisper smallのFTによりCERが0.269→0.095（64.6%改善）となり，'
+        'FT後のSE悪化幅も縮小（+0.027→+0.007）した—'
+        'ASRドメイン適応がアーティファクト感受性を低減することを示す．'
+        '今後はWhisper large-v3でのFTおよび複数話者評価による汎化性の検証を予定する．')
 
     # 参考文献
     h1(doc, '', '参考文献')
     refs = [
-        '[1] C.O. Mawalim, S. Okada, M. Unoki, Interspeech 2024, pp.1735–1739.',
-        '[2] T. Ochiai et al., IEEE/ACM TASLP 2024, arXiv:2404.14860.',
-        '[3] X. Rong et al., arXiv:2404.11567, 2024.',
-        '[4] Y. Kim et al., HuggingFace: yskim3271/TAPS, 2023.',
+        '[1] C.O. Mawalim, S. Okada, M. Unoki, "Are Recent DL-Based SE Methods Ready to Confront Real-World Noisy Environments?", Interspeech 2024, pp.1735–1739.',
+        '[2] T. Ochiai et al., "Rethinking Processing Distortions: How Do They Affect the Downstream ASR Performance?", IEEE/ACM TASLP 2024, arXiv:2404.14860.',
+        '[3] X. Rong et al., "GTCRN: A Speech Enhancement Model Requiring Ultra-Tiny Resources", arXiv:2404.11567, 2024.',
+        '[4] Y. Kim, Y. Song, Y. Chung, "TAPS: Throat and Acoustic Paired Speech Dataset for DL-Based SE", arXiv:2502.11478, 2025.',
+        '[5] Y. Kim and Y. Chung, "Modality-Specific SE and Noise-Adaptive Fusion for Acoustic and Body-Conduction Microphone Framework", Interspeech 2025.',
     ]
     for ref in refs:
         p = doc.add_paragraph(ref)

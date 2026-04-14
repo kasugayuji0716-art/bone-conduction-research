@@ -95,7 +95,7 @@ def add_title_bar(slide, title, subtitle=None):
               Inches(0.4), Inches(0.95), Inches(12.5), Inches(0.4),
               size=14, color=RGBColor(0xBB, 0xDE, 0xFB), align=PP_ALIGN.LEFT)
 
-def add_footer(slide, page_num, total=25):
+def add_footer(slide, page_num, total=28):
     add_rect(slide, 0, H - Inches(0.35), W, Inches(0.35),
              RGBColor(0xE8, 0xEA, 0xF6))
     txbox(slide, f'{page_num} / {total}',
@@ -1081,6 +1081,60 @@ def s23_phase2_result(prs):
     add_footer(sl, 23)
 
 
+def s23b_2x2(prs):
+    sl = blank_slide(prs)
+    add_title_bar(sl, '補足：2×2 比較（ASRモデル × SE）', subtitle='FT後もSEは有害—ただし悪影響は縮小')
+
+    # 2x2 テーブル
+    cols = ['', 'No SE', 'GTCRN SE']
+    rows = [
+        ['未学習 Whisper', '0.269  [A]', '0.296  [B]  (+0.027)'],
+        ['FT済み Whisper', '0.095  [C]', '0.1015 [D]  (+0.007)'],
+    ]
+    col_x = [Inches(0.4), Inches(3.5), Inches(8.0)]
+    col_w = [Inches(3.0), Inches(4.3), Inches(4.5)]
+    row_y = [Inches(1.65), Inches(2.6), Inches(3.55)]
+    row_h = Inches(0.85)
+
+    header_bg = RGBColor(0x1A, 0x23, 0x7E)
+    cell_bgs = [
+        [RGBColor(0xE3,0xF2,0xFD), RGBColor(0xFF,0xEB,0xEE)],
+        [RGBColor(0xC8,0xE6,0xC9), RGBColor(0xFF,0xF9,0xC4)],
+    ]
+
+    # ヘッダ行
+    for ci, (cx, cw, label) in enumerate(zip(col_x, col_w, cols)):
+        add_rect(sl, cx, row_y[0], cw, row_h, header_bg)
+        txbox(sl, label, cx+Inches(0.05), row_y[0]+Inches(0.22),
+              cw-Inches(0.1), Inches(0.4),
+              size=16, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+
+    # データ行
+    for ri, (row, ry) in enumerate(zip(rows, row_y[1:])):
+        for ci, (cx, cw, cell) in enumerate(zip(col_x, col_w, row)):
+            bg = header_bg if ci == 0 else cell_bgs[ri][ci-1]
+            txt_col = C_WHITE if ci == 0 else C_DARK
+            sz = 15 if ci == 0 else 20
+            add_rect(sl, cx, ry, cw, row_h, bg)
+            txbox(sl, cell, cx+Inches(0.05), ry+Inches(0.2),
+                  cw-Inches(0.1), Inches(0.5),
+                  size=sz, bold=(ci==0), color=txt_col, align=PP_ALIGN.CENTER)
+
+    # 矢印と解説
+    txbox(sl, '▼ SE悪化幅', Inches(8.15), Inches(2.55), Inches(4.3), Inches(0.35),
+          size=12, color=C_GRAY, align=PP_ALIGN.CENTER)
+    txbox(sl, '+0.027 → +0.007 に縮小',
+          Inches(8.0), Inches(4.5), Inches(5.0), Inches(0.5),
+          size=16, bold=True, color=C_GREEN, align=PP_ALIGN.LEFT)
+
+    add_rect(sl, Inches(0.4), Inches(5.3), Inches(12.5), Inches(0.8), RGBColor(0xFF,0xF9,0xC4))
+    txbox(sl, 'FTによりSEの悪影響は縮小するが消えない—SEの適用はFT後も推奨されない',
+          Inches(0.55), Inches(5.42), Inches(12.2), Inches(0.5),
+          size=16, bold=True, color=C_NAVY, align=PP_ALIGN.CENTER)
+
+    add_footer(sl, 24)
+
+
 def s24_conclusion(prs):
     sl = blank_slide(prs)
     add_title_bar(sl, 'まとめ')
@@ -1093,14 +1147,15 @@ def s24_conclusion(prs):
         ('（2）', 'GTCRNはSTOI・PESQを改善しながらCERを悪化させる三重パラドックスが全ノイズ条件で観測された', C_ORANGE),
         ('（3）', 'DSP-onlyは3指標すべてを悪化させ、喉マイクには不適切な前処理である', C_ORANGE),
         ('（4）', 'Whisper smallのFTによりCERが0.269→0.095（64.6%改善）—「ASR側の適応」が音声処理より有効', C_GREEN),
+        ('（5）', 'FT後もSEの逆効果は残存するが悪化幅は縮小（+0.027→+0.007）—FTがSEアーティファクトへの感受性を低減', C_GREEN),
     ]):
-        y = Inches(2.3) + i * Inches(0.95)
-        add_rect(sl, Inches(0.4), y, Inches(12.5), Inches(0.82), C_LIGHT)
-        txbox(sl, mark, Inches(0.55), y+Inches(0.16),
-              Inches(0.8), Inches(0.45), size=15, bold=True, color=col)
-        txbox(sl, text, Inches(1.25), y+Inches(0.16),
-              Inches(11.4), Inches(0.45), size=15, color=C_DARK)
-    add_footer(sl, 24)
+        y = Inches(1.65) + i * Inches(0.77)
+        add_rect(sl, Inches(0.4), y, Inches(12.5), Inches(0.68), C_LIGHT)
+        txbox(sl, mark, Inches(0.55), y+Inches(0.1),
+              Inches(0.8), Inches(0.45), size=14, bold=True, color=col)
+        txbox(sl, text, Inches(1.25), y+Inches(0.1),
+              Inches(11.4), Inches(0.45), size=14, color=C_DARK)
+    add_footer(sl, 25)
 
 def s25_future(prs):
     sl = blank_slide(prs)
@@ -1129,7 +1184,7 @@ def s25_future(prs):
             txbox(sl, f'・ {item}',
                   Inches(0.7), y+Inches(0.88)+j*Inches(0.35), Inches(12.0), Inches(0.32),
                   size=13, color=C_DARK)
-    add_footer(sl, 25)
+    add_footer(sl, 26)
 
 def s26_refs(prs):
     sl = blank_slide(prs)
@@ -1156,7 +1211,7 @@ def s26_refs(prs):
                  RGBColor(0xF5,0xF5,0xF5))
         txbox(sl, ref, Inches(0.55), y+Inches(0.08), Inches(12.2), Inches(1.1),
               size=12, color=C_DARK)
-    add_footer(sl, 26)
+    add_footer(sl, 27)
 
 def s27_end(prs):
     sl = blank_slide(prs)
@@ -1173,7 +1228,7 @@ def s27_end(prs):
           'コード・データ：実験スクリプト一式（問い合わせ可）',
           Inches(0.6), Inches(5.0), Inches(12.1), Inches(0.9),
           size=14, color=RGBColor(0x90,0xCA,0xF9), align=PP_ALIGN.CENTER)
-    add_footer(sl, 27)
+    add_footer(sl, 28)
 
 
 # ── メイン ───────────────────────────────────────────────────
@@ -1205,6 +1260,7 @@ def main():
     s21_summary_results(prs)
     s22_phase2_approach(prs)
     s23_phase2_result(prs)
+    s23b_2x2(prs)
     s24_conclusion(prs)
     s25_future(prs)
     s26_refs(prs)
