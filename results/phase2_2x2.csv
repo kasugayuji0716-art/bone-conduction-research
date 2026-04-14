@@ -1,0 +1,5 @@
+condition,cer,note
+A: Pretrained + No SE  (Phase1),0.269,Phase1 baseline
+B: Pretrained + GTCRN  (Phase1),0.296,Phase1 result
+C: Fine-tuned + No SE  (Phase2),0.095,Phase2 result
+D: Fine-tuned + GTCRN  (This exp),0.1015,New experiment
