@@ -1,0 +1,5 @@
+condition,cer_mean,cer_std,n_samples
+A_pretrained_no_se,0.5436,0.5214,1000
+B_pretrained_gtcrn,0.6347,0.6558,1000
+C_finetuned_no_se,0.1498,0.0911,1000
+D_finetuned_gtcrn,0.186,0.1089,1000
