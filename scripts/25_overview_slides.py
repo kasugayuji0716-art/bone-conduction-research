@@ -426,12 +426,50 @@ def s4_paradox(prs):
           size=14, bold=True, color=C_RED, align=PP_ALIGN.CENTER)
 
 
-def s5_solution(prs):
+def s5_mechanism(prs):
     sl = blank_slide(prs)
-    add_title_bar(sl, '解決策と結論：「音声を直す」より「ASRを慣れさせる」', n=5)
+    add_title_bar(sl, 'なぜASRが悪化するのか：スペクトル分析', n=5)
+
+    spec_fig_path = os.path.join(BASE_DIR, 'results', 'figures', 'spectrum_analysis.png')
+    if os.path.exists(spec_fig_path):
+        with open(spec_fig_path, 'rb') as _f:
+            spec_buf = BytesIO(_f.read())
+        add_img(sl, spec_buf, Inches(0.3), Inches(1.45), 8.0)
+
+    # 右：解説
+    add_rect(sl, Inches(8.8), Inches(1.5), Inches(4.2), Inches(5.5), C_LRED)
+    txbox(sl, 'GTCRNが喉マイクに何をするか',
+          Inches(8.95), Inches(1.6), Inches(3.9), Inches(0.42),
+          size=15, bold=True, color=C_RED)
+    for i, (band, delta, desc) in enumerate([
+        ('0–0.5 kHz', '+1.6 dB', '低域にノイズ追加'),
+        ('1–4 kHz',   '−1〜2 dB', 'フォルマント帯域を削除'),
+        ('4–8 kHz',   '−12.7 dB', '高域を壊滅的に削除'),
+    ]):
+        y = Inches(2.15) + i * Inches(0.9)
+        add_rect(sl, Inches(8.95), y, Inches(3.9), Inches(0.8), C_WHITE)
+        txbox(sl, band, Inches(9.05), y+Inches(0.05), Inches(1.2), Inches(0.35),
+              size=12, bold=True, color=C_DARK)
+        txbox(sl, delta, Inches(10.25), y+Inches(0.05), Inches(1.4), Inches(0.35),
+              size=13, bold=True, color=C_RED)
+        txbox(sl, desc, Inches(9.05), y+Inches(0.45), Inches(3.7), Inches(0.3),
+              size=11, color=C_GRAY)
+
+    add_rect(sl, Inches(8.8), Inches(5.3), Inches(4.2), Inches(1.5),
+             RGBColor(0xFF, 0xF9, 0xC4))
+    txbox(sl,
+          '喉マイクは元々\n高域が欠落している\n↓\nGTCRNがさらに除去\n= 逆方向の操作',
+          Inches(8.95), Inches(5.35), Inches(3.9), Inches(1.35),
+          size=13, bold=False, color=C_NAVY)
+
+
+def s6_solution(prs):
+    sl = blank_slide(prs)
+    add_title_bar(sl, '解決策と結論：「音声を直す」より「ASRを慣れさせる」', n=6)
 
     # 左上：Whisper FT結果
     add_rect(sl, Inches(0.4), Inches(1.45), Inches(5.9), Inches(3.5), C_LGREEN)
+
     txbox(sl, '解決策：Whisper ファインチューニング（FT）',
           Inches(0.55), Inches(1.55), Inches(5.6), Inches(0.4),
           size=14, bold=True, color=C_GREEN)
@@ -479,9 +517,10 @@ def main():
     s2_background(prs)
     s3_prior_work(prs)
     s4_paradox(prs)
-    s5_solution(prs)
+    s5_mechanism(prs)
+    s6_solution(prs)
     prs.save(OUT_PPTX)
-    print(f'完了: {OUT_PPTX}  (5枚)')
+    print(f'完了: {OUT_PPTX}  (6枚)')
 
 
 if __name__ == '__main__':

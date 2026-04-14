@@ -95,7 +95,7 @@ def add_title_bar(slide, title, subtitle=None):
               Inches(0.4), Inches(0.95), Inches(12.5), Inches(0.4),
               size=14, color=RGBColor(0xBB, 0xDE, 0xFB), align=PP_ALIGN.LEFT)
 
-def add_footer(slide, page_num, total=28):
+def add_footer(slide, page_num, total=29):
     add_rect(slide, 0, H - Inches(0.35), W, Inches(0.35),
              RGBColor(0xE8, 0xEA, 0xF6))
     txbox(slide, f'{page_num} / {total}',
@@ -1135,6 +1135,48 @@ def s23b_2x2(prs):
     add_footer(sl, 24)
 
 
+def s23c_spectrum(prs):
+    sl = blank_slide(prs)
+    add_title_bar(sl, 'メカニズム分析：スペクトルで見るアーティファクト',
+                  subtitle='なぜGTCRNが喉マイクASRを悪化させるのか')
+
+    spec_fig_path = os.path.join(FIG_DIR, 'spectrum_analysis.png')
+    if os.path.exists(spec_fig_path):
+        pic = sl.shapes.add_picture(spec_fig_path,
+                                    Inches(0.3), Inches(1.45),
+                                    width=Inches(8.0))
+
+    # 右側：数値まとめ
+    bands = [
+        ('0–0.5 kHz', '+1.58 dB', '低域にアーティファクト追加', C_RED),
+        ('0.5–2.0 kHz', '−0.43〜−1.05 dB', '中域を削除', C_ORANGE),
+        ('2.0–4.0 kHz', '−2.23 dB', 'フォルマント主要帯域を抑制', C_ORANGE),
+        ('4.0–8.0 kHz', '−12.73 dB', '高域を壊滅的に削除', C_RED),
+    ]
+    txbox(sl, '帯域別エネルギー変化（GTCRN適用後）',
+          Inches(8.6), Inches(1.5), Inches(4.5), Inches(0.4),
+          size=13, bold=True, color=C_NAVY)
+    for i, (band, delta, desc, col) in enumerate(bands):
+        y = Inches(2.0) + i * Inches(0.9)
+        add_rect(sl, Inches(8.6), y, Inches(4.5), Inches(0.8),
+                 RGBColor(0xF5, 0xF5, 0xF5))
+        txbox(sl, band, Inches(8.7), y+Inches(0.04), Inches(1.4), Inches(0.35),
+              size=12, bold=True, color=C_DARK)
+        txbox(sl, delta, Inches(10.1), y+Inches(0.04), Inches(1.5), Inches(0.35),
+              size=13, bold=True, color=col)
+        txbox(sl, desc, Inches(8.7), y+Inches(0.42), Inches(4.2), Inches(0.3),
+              size=11, color=C_GRAY)
+
+    add_rect(sl, Inches(8.55), Inches(5.85), Inches(4.6), Inches(1.25),
+             RGBColor(0xFF, 0xEB, 0xEE))
+    txbox(sl,
+          '喉マイクは既に高域が欠落\n→ GTCRNがさらに除去（逆方向の動作）\n→ フォルマント情報を損失→ CER悪化',
+          Inches(8.7), Inches(5.9), Inches(4.3), Inches(1.1),
+          size=13, bold=False, color=C_NAVY)
+
+    add_footer(sl, 25)
+
+
 def s24_conclusion(prs):
     sl = blank_slide(prs)
     add_title_bar(sl, 'まとめ')
@@ -1155,7 +1197,7 @@ def s24_conclusion(prs):
               Inches(0.8), Inches(0.45), size=14, bold=True, color=col)
         txbox(sl, text, Inches(1.25), y+Inches(0.1),
               Inches(11.4), Inches(0.45), size=14, color=C_DARK)
-    add_footer(sl, 25)
+    add_footer(sl, 26)
 
 def s25_future(prs):
     sl = blank_slide(prs)
@@ -1184,7 +1226,7 @@ def s25_future(prs):
             txbox(sl, f'・ {item}',
                   Inches(0.7), y+Inches(0.88)+j*Inches(0.35), Inches(12.0), Inches(0.32),
                   size=13, color=C_DARK)
-    add_footer(sl, 26)
+    add_footer(sl, 27)
 
 def s26_refs(prs):
     sl = blank_slide(prs)
@@ -1211,7 +1253,7 @@ def s26_refs(prs):
                  RGBColor(0xF5,0xF5,0xF5))
         txbox(sl, ref, Inches(0.55), y+Inches(0.08), Inches(12.2), Inches(1.1),
               size=12, color=C_DARK)
-    add_footer(sl, 27)
+    add_footer(sl, 28)
 
 def s27_end(prs):
     sl = blank_slide(prs)
@@ -1228,7 +1270,7 @@ def s27_end(prs):
           'コード・データ：実験スクリプト一式（問い合わせ可）',
           Inches(0.6), Inches(5.0), Inches(12.1), Inches(0.9),
           size=14, color=RGBColor(0x90,0xCA,0xF9), align=PP_ALIGN.CENTER)
-    add_footer(sl, 28)
+    add_footer(sl, 29)
 
 
 # ── メイン ───────────────────────────────────────────────────
@@ -1261,6 +1303,7 @@ def main():
     s22_phase2_approach(prs)
     s23_phase2_result(prs)
     s23b_2x2(prs)
+    s23c_spectrum(prs)
     s24_conclusion(prs)
     s25_future(prs)
     s26_refs(prs)

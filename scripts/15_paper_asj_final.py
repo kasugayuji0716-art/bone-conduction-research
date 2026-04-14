@@ -397,8 +397,31 @@ def main():
     add_fig(doc, fig_metrics_table_img(cer, stoi, pesq), w_cm=7.5,
             cap='表1　代表条件のCER・STOI・PESQ（白色ノイズ）')
 
-    # 3.4 フェーズ2：Whisperファインチューニング
-    h2(doc, '3.4', 'Whisperファインチューニングの効果')
+    # 3.4 スペクトル分析
+    h2(doc, '3.4', 'スペクトル分析：アーティファクトの周波数特性')
+    body(doc,
+        'GTCRNが引き起こすCER悪化のメカニズムを明らかにするため，'
+        '話者p00の50発話を対象にSE前後の平均パワースペクトル（2048点FFT）を比較した．'
+        '図3に帯域別エネルギー差（Δ = After − Before）を示す．'
+        '0–0.5 kHz帯域では+1.58 dBのエネルギー追加が見られる一方，'
+        '4–8 kHz帯域では−12.73 dBという壊滅的な高域削除が生じた．')
+    body(doc,
+        '喉マイクは本来，骨振動の伝達特性により2 kHz以上の高周波成分が欠落している．'
+        'DNS3（気導マイク）で学習したGTCRNは，この高域の無音状態を「ノイズ」と誤判定し，'
+        'さらに除去しようとする逆方向の動作をする．'
+        '結果として1–4 kHz帯域（音声フォルマントの主要周波数帯）も−2.23 dBと抑制され，'
+        'ASRが依存する音韻情報が損失される．'
+        'この周波数特性の歪みが，STOI・PESQ改善と同時にCER悪化を引き起こす直接的メカニズムである．')
+
+    spec_fig_path = os.path.join(BASE_DIR, 'results', 'figures', 'spectrum_analysis.png')
+    if os.path.exists(spec_fig_path):
+        with open(spec_fig_path, 'rb') as f:
+            spec_buf = BytesIO(f.read())
+        add_fig(doc, spec_buf, w_cm=7.5,
+                cap='図3　SE前後の平均パワースペクトルと周波数帯別エネルギー差（話者p00，n=50）')
+
+    # 3.5 フェーズ2：Whisperファインチューニング
+    h2(doc, '3.5', 'Whisperファインチューニングの効果')
     body(doc,
         'SEによる音声変換ではなく，ASRモデル自体を喉マイクに適応させる'
         'アプローチとして，Whisper smallをTAPSのtrain split'
@@ -444,7 +467,7 @@ def main():
     fig2.tight_layout(pad=0.3)
     buf2 = BytesIO(); fig2.savefig(buf2, format='png', dpi=180, bbox_inches='tight')
     plt.close(fig2); buf2.seek(0)
-    add_fig(doc, buf2, w_cm=7.5, cap='表2　Whisperファインチューニングの効果（テストセット話者p00）')
+    add_fig(doc, buf2, w_cm=7.5, cap='表2　Whisperファインチューニングの効果（テストセット全10話者）')
 
     # 4. 考察
     h1(doc, '4', '考察')
@@ -455,6 +478,11 @@ def main():
         '喉マイクの低域偏重スペクトルはドメイン外入力である．'
         'このため非線形変換が大きなアーティファクト誤差を生じさせ，'
         '多条件訓練されたASRモデルでも対処できない特徴空間の歪みを引き起こす．'
+        'スペクトル分析（3.4節）はこのメカニズムを直接可視化した：'
+        'GTCRNは4–8 kHz帯を−12.73 dBと壊滅的に削除し，'
+        '1–4 kHz帯（フォルマント主要帯域）も−2.23 dBと抑制する．'
+        '喉マイクが既に欠落している高域をさらに除去するこの動作が'
+        'Ochiaiらのアーティファクト誤差の実態である．'
         'なおTAPSのSE-conformer [5] はTAPSデータで学習したドメイン適合型SEであり'
         'CER 84.4%→24.4%と改善する．'
         '本結果との比較は「ドメイン適合型SEは有効，ドメイン外SEは逆効果」という'
@@ -481,7 +509,8 @@ def main():
         '（1）STOI・PESQを改善するGTCRNが全ノイズ条件でCERを有意に悪化させる'
         '（26/30条件，p<0.05）—知覚品質指標はASR性能を予測しない．'
         '（2）この逆行はOchiaiら [2] のアーティファクト誤差フレームワークで説明され，'
-        'DNS3学習済みGTCRNの喉マイクへのドメインシフトが大きなアーティファクトを生成する．'
+        'スペクトル分析によりGTCRNが4–8 kHz帯を−12.73 dBと壊滅的に削除することが判明した—'
+        '喉マイクが既に欠落している高域をさらに除去するという逆方向の動作である．'
         f'（3）一方，ASRモデルのドメイン適応（Whisper small FT）は'
         f'CERを{ms_A:.3f}→{ms_C:.3f}（{ms_ft_improve:.1f}%改善，10話者・1,000発話）と根本的に解決し，'
         f'FT後はSEの悪影響も縮小（{ms_se_harm_pre:+.3f}→{ms_se_harm_ft:+.3f}）した．'
