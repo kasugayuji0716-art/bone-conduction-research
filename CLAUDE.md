@@ -5,7 +5,7 @@
 **テーマ**: 喉マイク（骨伝導マイク）音声に対するSpeech Enhancement（SE）がWhisperのCERに与える影響の定量的評価、および喉マイク特化モデルの開発
 
 **フェーズ1 RQ**: 「どの条件でSEが喉マイク音声のASR（Whisper）性能を悪化させるか」
-**フェーズ2 RQ（修正後）**: 「Whisper smallを喉マイク音声でファインチューニングするとCERは改善するか」
+**フェーズ2 RQ（修正後）**: 「Whisper smallを喉マイク音声でファインチューニングするとCERは改善するか」→ **Yes（CER 0.269 → 0.095、64.6%改善）**
 
 **主要発見（フェーズ1）**:
 - DSP・GTCRNともに全ノイズ条件でCERが悪化する
@@ -78,6 +78,8 @@
 | 16_slides.py | 研究紹介スライド（25枚） | results/slides.pptx |
 | 20_finetune_gtcrn.py | GTCRNファインチューニング（失敗） | checkpoints/gtcrn_taps_finetuned.tar |
 | 21_evaluate_finetuned.py | ファインチューニング後CER評価 | results/phase2_cer.csv, phase2_comparison.csv |
+| 22_finetune_whisper.py | Whisper smallファインチューニング（epochs=20, batch=16, lr=1e-5） | checkpoints/whisper_throat_finetuned/ |
+| 23_evaluate_whisper_ft.py | ファインチューニング済みWhisper評価（testセット話者p00 100件） | results/phase2_whisper_cer.csv, phase2_whisper_summary.csv |
 
 ---
 
@@ -122,14 +124,24 @@ gtcrn/clean (original) 0.296
 gtcrn/clean (ft)       1.051  ← 大幅悪化
 ```
 
-### 方針転換: Whisperのファインチューニング
+### 方針転換: Whisperのファインチューニング（成功）
 「音声を修正する」ではなく「ASRモデルを喉マイクに慣れさせる」アプローチへ変更
 
 - **入力**: 喉マイク音声（throat/train, 4,000件）
 - **教師ラベル**: 韓国語テキスト（metadata_train.csv）
 - **モデル**: Whisper small（openai/whisper-small）
-- **期待効果**: ドメインミスマッチの解消によるCER直接改善
-- **比較**: フェーズ1のbaseline_throat CER=0.269 を下回れるか
+- **学習設定**: epochs=20, batch_size=16, lr=1e-5, warmup_steps=500, fp16=True
+- **早期停止**: epoch5で停止（patience=3）、best checkpoint = epoch3
+
+### フェーズ2 最終結果（testセット 話者p00 100件）
+
+```
+condition                          CER
+baseline_throat (Phase1, 未学習)  0.2690
+whisper_small_finetuned (Phase2)   0.0952  ← 64.6%改善
+```
+
+→ フェーズ2 RQ: **Whisper FTによりCERはbaseline_throatの約1/3に改善（0.269 → 0.095）**
 
 ---
 

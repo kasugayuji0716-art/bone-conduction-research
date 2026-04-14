@@ -1,0 +1,3 @@
+condition,avg_cer,vs_baseline
+whisper_small_pretrained (Phase1),0.269,—
+whisper_small_finetuned (Phase2),0.0952,-0.1738
