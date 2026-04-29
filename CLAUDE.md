@@ -45,6 +45,15 @@
 - スペクトログラムで 4 kHz に直線的なカットオフが現れる → 元の収録が 8 kHz（ナイキスト = 4 kHz）で行われ、16 kHz にアップサンプリングされた痕跡
 - 3–4 kHz vs 4–5 kHz のエネルギー比が 43〜273倍（自然な物理ロールオフではなくフィルタによる急峻なカットオフ）
 - 喉マイクの骨伝導特性による自然な高域減衰（2〜3 kHz以降）と、アップサンプリングによる 4 kHz 以上の完全無音が重なっている
+- **重要な用語訂正**: 「4kHz以上が欠落」は不正確。正確には「8kHz収録（ナイキスト=4kHz）により、4kHz以上は収録時点から不在」。欠落（存在したものが失われた）ではなく不在（最初から存在しない）が正確
+- TAPS論文（arXiv:2502.11478、p.3）に明記: "The accelerometer was configured with 8 kHz sampling rate"、Post-processingでFourier-based resamplingを確認済み
+
+**TAPSデータセット引用状況（2026年4月時点）**
+- 引用数: 5件（主にPOSTECHグループ）
+  - BAF-Net（Kim & Chung, Interspeech 2025）: ドメイン適合型SE-conformer → CER 84.4%→24.4%（最重要先行研究）
+  - LAU-Net（Song et al., 2025）: 喉マイク強調ネットワーク
+  - その他3件: サーベイ・データセット論文
+- 外部研究者によるASR応用はほぼ未着手のフロンティア領域
 
 **気導マイクデータの使用状況**
 - Whisper FT・CER評価：**未使用**（喉マイクのみ）
@@ -164,6 +173,12 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 - 試み: 「喉マイク入力 → 気導マイク出力」で再学習
 - 失敗原因: GTCRNは「削る」モデル。存在しない高周波を「生成」するのは逆方向の操作
 - 損失が収束せず（HybridLoss 97〜99）、CER≈1.0
+- ログ: `checkpoints/training_log.csv`（Mac上で確認可能）
+
+### Whisper FTのエポック停止について
+- early stopping（patience=3）でepoch 3に停止したのは**過学習ではなく早期収束**と考えられる
+- 根拠: pretrained Whisperは韓国語ASRを既に学習済み → 喉マイクドメイン適応は少ないepochで完了する
+- FT学習ログ（epoch別CER）はDNN PC側に存在: `~/kasuga/bone_conduction_research/checkpoints/whisper_throat_finetuned/trainer_state.json`
 
 ---
 
@@ -190,6 +205,75 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 3. ノイズ下でのFT評価（MUSAN・DEMANDなど実録音ノイズ）
 4. Knowledge Distillation（気導マイクモデル → 喉マイクモデル）
 5. 音素誤認識分析による学習戦略の改善
+
+---
+
+## フェーズ3: 最小介入学習フレームワーク（研究計画）
+
+### 研究の動機と問題設定の再定義
+
+フェーズ1・2の発見から、問題を再定義した：
+
+**従来の問題設定**: 「喉マイクの音質をどう改善するか」
+**再定義**: 「喉マイクの強みを保ちながら、最小限の介入でASR性能を引き上げるにはどうするか」
+
+喉マイクの強み: **ノイズ免疫性**（体内収録のため環境雑音が入りにくい）
+喉マイクの弱み: 4kHz以上が収録時点から不在、低域中心の音響特性
+
+→ 気導マイク向けSEを丸ごと適用（フェーズ1）は強みを損なわず弱みも埋められない
+→ Whisper全体のFT（フェーズ2）は弱みを埋めるが強みを壊す可能性がある（未検証）
+
+### 提案: Minimum Intervention Learning Framework (MILF)
+
+#### コアアーキテクチャ: Adapter + Knowledge Distillation
+
+**Adapterモジュール**（小さなボトルネックNN）:
+- Whisper Encoderの各Transformerブロック間に挿入
+- 構造: `x → Linear(512→r) → ReLU → Linear(r→512) → + x`（残差接続）
+- rはボトルネック次元（r=8〜64程度）→「介入量」を制御するハイパーパラメータ
+- 初期化: 出力層をゼロ初期化 → 学習開始時は恒等変換（何もしない）
+- **Whisperの重みは完全凍結**。学習するのはAdapterパラメータのみ（全体の約0.3%）
+- 利点: Whisperの音響知識・言語知識を破壊せず、最小限の変更でドメイン適応
+
+**知識蒸留（Knowledge Distillation）**:
+- Teacher: 気導マイク音声で動作するWhisper（凍結）
+- Student: 喉マイク音声 + Adapter挿入のWhisper
+- 同一発話のペア（TAPS）を使い、Teacherの中間表現にStudentが近づくよう学習
+- Loss = α × CER損失（テキスト正解との差） + β × 蒸留損失（Teacher-Student表現距離）
+- テキストラベルも使用（Semi-supervised的な設計）
+
+**TAPSペアデータが必須条件**: 同一発話の喉マイク+気導マイクペアが揃うTAPSは希少なデータセット
+
+#### 新提案評価指標: Noise Immunity Retention (NIR)
+
+喉マイクのノイズ免疫性がFT後も保たれているかを定量化：
+
+```
+NIR = (raw_throat_noise_sensitivity) / (ft_model_noise_sensitivity)
+noise_sensitivity = CER_noisy - CER_clean
+```
+
+- NIR ≈ 1.0: ノイズ免疫性が完全に保持されている
+- NIR < 1.0: FTによりノイズ免疫性が低下（過適応）
+- NIR > 1.0: ノイズ耐性がさらに向上（理想的）
+
+フェーズ2の「クリーン音声のみでFT」がNIRに与える影響の検証が最初の実験課題。
+
+#### 次の実験ステップ（DNN PCで実行予定）
+
+1. **NIR計測実験**: 既存FT済みWhisper（`checkpoints/whisper_throat_finetuned/`）に対し、
+   ノイズ付加テストデータでCER評価 → pretrained WhisperとのNIR比較
+   - 懸念: クリーン音声のみで学習したFTモデルはノイズ下で未学習Whisperより悪化する可能性
+2. **Adapterモジュール実装**: Whisper EncoderへのAdapter挿入コードを書く
+3. **蒸留ロスの実装**: Encoder中間表現のMSE距離をロスに組み込む
+4. **比較実験**: pretrained / FT-only / Adapter+KD の3条件でNIR・CER比較
+
+#### 論文としての新規性（国際会議Interspeech等を目標）
+
+1. **新しいアーキテクチャ**: Band-Specific Adapter（低域・中域・高域で異なる介入量）の可能性
+2. **新しい評価軸**: NIRメトリクスの導入（ノイズ免疫性の保持を明示的に評価）
+3. **3層の貢献**: フェーズ1（問題発見）→ フェーズ2（naive FTの限界）→ フェーズ3（解決策）という一貫したストーリー
+4. **TAPSペアデータ活用**: 同一発話ペアを用いた知識蒸留は喉マイクASRでは未報告
 
 ---
 
