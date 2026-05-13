@@ -40,7 +40,7 @@ from transformers import (
     EarlyStoppingCallback,
 )
 try:
-    from peft import LoraConfig, get_peft_model, TaskType
+    from peft import LoraConfig, get_peft_model
 except ImportError:
     raise ImportError('peft が必要です: pip install peft')
 import evaluate
@@ -154,8 +154,8 @@ def main():
     model.config.suppress_tokens    = []
 
     # LoRA 設定（Encoder + Decoder 両方に適用される）
+    # task_type を指定しないことで peft 0.19+ / transformers 5.x の互換性問題を回避
     lora_config = LoraConfig(
-        task_type=TaskType.SEQ_2_SEQ_LM,
         r=args.r,
         lora_alpha=args.lora_alpha,
         target_modules=target_modules,
