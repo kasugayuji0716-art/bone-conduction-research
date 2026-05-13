@@ -10,14 +10,23 @@ NIR ≈ 1.0: ノイズ免疫性が保持されている
 NIR < 1.0: FTによりノイズ免疫性が低下 → Phase 3（Adapter+KD）の動機
 
 出力:
-  results/nir_per_sample.csv  -- サンプル×条件 CER
-  results/nir_summary.csv     -- 条件ごとCER + NIR
-  results/nir_report.txt      -- 人間が読みやすいサマリー
+  results/nir_per_sample_{start}_{end}.csv  -- サンプル×条件 CER（部分）
+  results/nir_summary.csv                   -- 条件ごとCER + NIR（全体マージ後）
+  results/nir_report.txt                    -- 人間が読みやすいサマリー（全体マージ後）
 
-実行:
+実行例:
+  # 全件（1GPU）
   python3 scripts/28_nir_evaluation.py
+
+  # 2GPU並列
+  mkdir -p logs
+  CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1 python3 scripts/28_nir_evaluation.py --start 0   --end 500  2>&1 | tee logs/nir_gpu0.log &
+  CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python3 scripts/28_nir_evaluation.py --start 500 --end 1000 2>&1 | tee logs/nir_gpu1.log &
+  wait
+  python3 scripts/28_nir_evaluation.py --merge
 """
 
+import argparse
 import csv
 from pathlib import Path
 
@@ -85,12 +94,133 @@ def transcribe(wav, processor, model, device):
     return processor.tokenizer.batch_decode(ids, skip_special_tokens=True)[0]
 
 
+# ── NIRサマリー計算・レポート出力（マージ後に呼ぶ）────────────
+def compute_summary_and_report(rows):
+    pre_clean_mean = float(np.mean([r['pre_clean'] for r in rows]))
+    ft_clean_mean  = float(np.mean([r['ft_clean']  for r in rows]))
+
+    summary_rows = []
+    for noise_type in NOISE_TYPES:
+        for snr in SNR_LEVELS:
+            key = f'{noise_type}_snr{snr:+d}'
+            pre_noisy = float(np.mean([r[f'pre_{key}'] for r in rows]))
+            ft_noisy  = float(np.mean([r[f'ft_{key}']  for r in rows]))
+            pre_sens  = pre_noisy - pre_clean_mean
+            ft_sens   = ft_noisy  - ft_clean_mean
+            nir = (pre_sens / ft_sens) if abs(ft_sens) > 1e-6 else float('inf')
+            summary_rows.append({
+                'noise_type':      noise_type,
+                'snr_db':          snr,
+                'pre_clean_cer':   round(pre_clean_mean, 4),
+                'ft_clean_cer':    round(ft_clean_mean,  4),
+                'pre_noisy_cer':   round(pre_noisy, 4),
+                'ft_noisy_cer':    round(ft_noisy,  4),
+                'pre_sensitivity': round(pre_sens,  4),
+                'ft_sensitivity':  round(ft_sens,   4),
+                'NIR':             round(nir, 4) if nir != float('inf') else 'inf',
+            })
+
+    out_sum = RESULT_DIR / 'nir_summary.csv'
+    fields = ['noise_type', 'snr_db', 'pre_clean_cer', 'ft_clean_cer',
+              'pre_noisy_cer', 'ft_noisy_cer', 'pre_sensitivity', 'ft_sensitivity', 'NIR']
+    with open(out_sum, 'w', newline='', encoding='utf-8') as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        w.writerows(summary_rows)
+
+    lines = []
+    lines.append('=' * 65)
+    lines.append('  Noise Immunity Retention (NIR) Report')
+    lines.append('=' * 65)
+    lines.append(f'\nClean CER:')
+    lines.append(f'  Pretrained Whisper : {pre_clean_mean:.4f}')
+    lines.append(f'  Fine-tuned Whisper : {ft_clean_mean:.4f}')
+    lines.append(f'  改善率             : {(1 - ft_clean_mean / pre_clean_mean) * 100:.1f}%')
+    lines.append(f'\nNIR の読み方:')
+    lines.append(f'  NIR > 1.0 → FTによりノイズ耐性が向上（理想的）')
+    lines.append(f'  NIR ≈ 1.0 → ノイズ免疫性が保持されている')
+    lines.append(f'  NIR < 1.0 → FTによりノイズ免疫性が低下 → Phase 3の動機')
+    lines.append('')
+    lines.append(f'{"ノイズ":>6} {"SNR":>6}  {"pre_noisy":>10} {"ft_noisy":>10}'
+                 f'  {"pre_sens":>9} {"ft_sens":>9}  {"NIR":>7}')
+    lines.append('-' * 68)
+    for r in summary_rows:
+        nir_str = f'{r["NIR"]:>7.4f}' if r['NIR'] != 'inf' else '    inf'
+        lines.append(f'{r["noise_type"]:>6} {r["snr_db"]:>+5}dB'
+                     f'  {r["pre_noisy_cer"]:>10.4f} {r["ft_noisy_cer"]:>10.4f}'
+                     f'  {r["pre_sensitivity"]:>9.4f} {r["ft_sensitivity"]:>9.4f}'
+                     f'  {nir_str}')
+
+    nir_vals = [r['NIR'] for r in summary_rows if r['NIR'] != 'inf']
+    avg_nir = float(np.mean(nir_vals)) if nir_vals else 0.0
+    lines.append(f'\n平均NIR（全条件）: {avg_nir:.4f}')
+    if avg_nir < 0.8:
+        lines.append('→ FTによりノイズ免疫性が大幅に低下。Adapter+KDの導入根拠として強い。')
+    elif avg_nir < 1.0:
+        lines.append('→ FTにより若干のノイズ免疫性低下。Adapter+KDで改善の余地あり。')
+    else:
+        lines.append('→ FTによりノイズ免疫性が保持/向上。Adapter+KDでさらなる向上を目標に。')
+
+    report_txt = '\n'.join(lines)
+    print('\n' + report_txt)
+    out_report = RESULT_DIR / 'nir_report.txt'
+    out_report.write_text(report_txt, encoding='utf-8')
+    print(f'\n保存: {out_sum}')
+    print(f'保存: {out_report}')
+
+
+# ── マージモード ──────────────────────────────────────────────
+def merge_mode():
+    parts = sorted(RESULT_DIR.glob('nir_per_sample_*_*.csv'))
+    if not parts:
+        print('ERROR: nir_per_sample_*_*.csv が見つかりません')
+        return
+    print(f'マージ対象: {[p.name for p in parts]}')
+
+    rows = []
+    fieldnames = None
+    for p in parts:
+        with open(p, encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            if fieldnames is None:
+                fieldnames = reader.fieldnames
+            rows.extend(list(reader))
+
+    # 数値に変換
+    for r in rows:
+        for k in r:
+            if k not in ('speaker_id', 'sentence_id', 'reference'):
+                try:
+                    r[k] = float(r[k])
+                except ValueError:
+                    pass
+
+    out_all = RESULT_DIR / 'nir_per_sample.csv'
+    with open(out_all, 'w', newline='', encoding='utf-8') as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        w.writerows(rows)
+    print(f'マージ完了: {len(rows)}件 → {out_all}')
+
+    compute_summary_and_report(rows)
+
+
 # ── メイン ────────────────────────────────────────────────────
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--start', type=int, default=0,    help='開始サンプルインデックス')
+    parser.add_argument('--end',   type=int, default=None, help='終了サンプルインデックス')
+    parser.add_argument('--merge', action='store_true',    help='分割CSVをマージしてNIR計算')
+    args = parser.parse_args()
+
+    if args.merge:
+        merge_mode()
+        return
+
     np.random.seed(42)  # ノイズ再現性のため固定
 
     # サンプル収集
-    samples = []
+    all_samples = []
     meta = TAPS_DIR / 'metadata_test.csv'
     if not meta.exists():
         print(f'ERROR: {meta} が見つかりません')
@@ -104,10 +234,12 @@ def main():
             p2   = TAPS_DIR / 'throat' / f'{spk}_{sid}.wav'
             path = p1 if p1.exists() else (p2 if p2.exists() else None)
             if path:
-                samples.append({'spk': spk, 'sid': sid,
-                                'path': path, 'text': row['text']})
+                all_samples.append({'spk': spk, 'sid': sid,
+                                    'path': path, 'text': row['text']})
 
-    print(f'サンプル数: {len(samples)}')
+    end = args.end if args.end is not None else len(all_samples)
+    samples = all_samples[args.start:end]
+    print(f'サンプル数: {len(samples)} ({args.start}〜{end})')
 
     # モデルロード
     print('Whisper pretrained ロード中...')
@@ -149,93 +281,17 @@ def main():
             print(f'[{i+1:4d}/{len(samples)}] {s["spk"]} {s["sid"]}  '
                   f'pre_clean={row["pre_clean"]:.3f}  ft_clean={row["ft_clean"]:.3f}')
 
-    # ── per-sample CSV ─────────────────────────────────────────
+    # ── per-sample CSV（分割ファイルとして保存）──────────────────
     RESULT_DIR.mkdir(exist_ok=True)
     all_keys = list(rows[0].keys())
-    out_sample = RESULT_DIR / 'nir_per_sample.csv'
+    out_sample = RESULT_DIR / f'nir_per_sample_{args.start}_{end}.csv'
     with open(out_sample, 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=all_keys)
         w.writeheader()
         w.writerows(rows)
-
-    # ── NIR計算 ────────────────────────────────────────────────
-    pre_clean_mean = float(np.mean([r['pre_clean'] for r in rows]))
-    ft_clean_mean  = float(np.mean([r['ft_clean']  for r in rows]))
-
-    summary_rows = []
-    for noise_type in NOISE_TYPES:
-        for snr in SNR_LEVELS:
-            key = f'{noise_type}_snr{snr:+d}'
-            pre_noisy = float(np.mean([r[f'pre_{key}'] for r in rows]))
-            ft_noisy  = float(np.mean([r[f'ft_{key}']  for r in rows]))
-
-            pre_sens = pre_noisy - pre_clean_mean
-            ft_sens  = ft_noisy  - ft_clean_mean
-            nir = (pre_sens / ft_sens) if abs(ft_sens) > 1e-6 else float('inf')
-
-            summary_rows.append({
-                'noise_type':      noise_type,
-                'snr_db':          snr,
-                'pre_clean_cer':   round(pre_clean_mean, 4),
-                'ft_clean_cer':    round(ft_clean_mean,  4),
-                'pre_noisy_cer':   round(pre_noisy, 4),
-                'ft_noisy_cer':    round(ft_noisy,  4),
-                'pre_sensitivity': round(pre_sens,  4),
-                'ft_sensitivity':  round(ft_sens,   4),
-                'NIR':             round(nir, 4) if nir != float('inf') else 'inf',
-            })
-
-    out_sum = RESULT_DIR / 'nir_summary.csv'
-    fields = ['noise_type', 'snr_db', 'pre_clean_cer', 'ft_clean_cer',
-              'pre_noisy_cer', 'ft_noisy_cer', 'pre_sensitivity', 'ft_sensitivity', 'NIR']
-    with open(out_sum, 'w', newline='', encoding='utf-8') as f:
-        w = csv.DictWriter(f, fieldnames=fields)
-        w.writeheader()
-        w.writerows(summary_rows)
-
-    # ── レポート ───────────────────────────────────────────────
-    lines = []
-    lines.append('=' * 65)
-    lines.append('  Noise Immunity Retention (NIR) Report')
-    lines.append('=' * 65)
-    lines.append(f'\nClean CER:')
-    lines.append(f'  Pretrained Whisper : {pre_clean_mean:.4f}')
-    lines.append(f'  Fine-tuned Whisper : {ft_clean_mean:.4f}')
-    lines.append(f'  改善率             : {(1 - ft_clean_mean / pre_clean_mean) * 100:.1f}%')
-    lines.append(f'\nNIR の読み方:')
-    lines.append(f'  NIR > 1.0 → FTによりノイズ耐性が向上（理想的）')
-    lines.append(f'  NIR ≈ 1.0 → ノイズ免疫性が保持されている')
-    lines.append(f'  NIR < 1.0 → FTによりノイズ免疫性が低下 → Phase 3の動機')
-    lines.append('')
-    lines.append(f'{"ノイズ":>6} {"SNR":>6}  {"pre_noisy":>10} {"ft_noisy":>10}'
-                 f'  {"pre_sens":>9} {"ft_sens":>9}  {"NIR":>7}')
-    lines.append('-' * 68)
-    for r in summary_rows:
-        nir_str = f'{r["NIR"]:>7.4f}' if r['NIR'] != 'inf' else '    inf'
-        lines.append(f'{r["noise_type"]:>6} {r["snr_db"]:>+5}dB'
-                     f'  {r["pre_noisy_cer"]:>10.4f} {r["ft_noisy_cer"]:>10.4f}'
-                     f'  {r["pre_sensitivity"]:>9.4f} {r["ft_sensitivity"]:>9.4f}'
-                     f'  {nir_str}')
-
-    nir_vals = [r['NIR'] for r in summary_rows if r['NIR'] != 'inf']
-    avg_nir = float(np.mean(nir_vals)) if nir_vals else 0.0
-    lines.append(f'\n平均NIR（全条件）: {avg_nir:.4f}')
-    if avg_nir < 0.8:
-        lines.append('→ FTによりノイズ免疫性が大幅に低下。Adapter+KDの導入根拠として強い。')
-    elif avg_nir < 1.0:
-        lines.append('→ FTにより若干のノイズ免疫性低下。Adapter+KDで改善の余地あり。')
-    else:
-        lines.append('→ FTによりノイズ免疫性が保持/向上。Adapter+KDでさらなる向上を目標に。')
-
-    report_txt = '\n'.join(lines)
-    print('\n' + report_txt)
-
-    out_report = RESULT_DIR / 'nir_report.txt'
-    out_report.write_text(report_txt, encoding='utf-8')
-
     print(f'\n保存: {out_sample}')
-    print(f'保存: {out_sum}')
-    print(f'保存: {out_report}')
+    print('全件完了後に --merge オプションでNIRを計算してください。')
+    print('  python3 scripts/28_nir_evaluation.py --merge')
 
 
 if __name__ == '__main__':
