@@ -1,0 +1,25 @@
+======================================================================
+  Cross-lingual Evaluation Report
+  Training: Korean TAPS throat mic
+  Hypothesis: Encoder-only Adapter transfers better to French
+======================================================================
+
+--- KOREAN ---
+  モデル                                 CER     ±std
+  ---------------------------------------------
+  A: Pretrained Whisper            0.5436   0.5214
+  B: Full FT (Korean)              0.1498   0.0911
+  C: Encoder-only Adapter          0.1496   0.1370
+  D: Enc+Dec LoRA (Korean)         0.2202   0.1993
+
+--- FRENCH ---
+  モデル                                 CER     ±std
+  ---------------------------------------------
+  A: Pretrained Whisper            0.8201   2.2221
+  B: Full FT (Korean)              0.3762   0.3126
+  C: Encoder-only Adapter          0.4994   0.5874
+  D: Enc+Dec LoRA (Korean)         0.4337   0.4906
+
+--- 仮説検証 ---
+  ✗ 仮説棄却: Adapter の French CER (0.4994) >= Full FT (0.3762)
+    差: 0.1232

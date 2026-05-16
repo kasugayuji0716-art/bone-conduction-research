@@ -52,7 +52,7 @@ FT_CKPT          = BASE_DIR / 'checkpoints' / 'whisper_throat_finetuned'
 ADAPTER_CKPT     = BASE_DIR / 'checkpoints' / 'whisper_encoder_adapter'
 LORA_CKPT        = BASE_DIR / 'checkpoints' / 'whisper_encoder_decoder_lora'
 
-D_MODEL = 512  # Whisper small
+D_MODEL = 768  # Whisper small（adapter_config.json からも読み込む）
 
 
 # ── Adapter モジュール（29番と同一定義）────────────────────────
@@ -74,12 +74,9 @@ class WhisperEncoderLayerWithAdapter(nn.Module):
         self.layer   = original_layer
         self.adapter = adapter
 
-    def forward(self, hidden_states, attention_mask=None,
-                layer_head_mask=None, output_attentions=False):
-        outputs      = self.layer(hidden_states, attention_mask,
-                                  layer_head_mask, output_attentions)
-        hidden_states = self.adapter(outputs[0])
-        return (hidden_states,) + outputs[1:]
+    def forward(self, hidden_states, attention_mask=None, **kwargs):
+        hidden_states = self.layer(hidden_states, attention_mask, **kwargs)
+        return self.adapter(hidden_states)
 
 
 # ── モデルロード ───────────────────────────────────────────────
@@ -106,7 +103,8 @@ def load_adapter():
     config_path = ADAPTER_CKPT / 'adapter_config.json'
     with open(config_path) as f:
         config = json.load(f)
-    r = config['r']
+    r       = config['r']
+    d_model = config.get('d_model', D_MODEL)
 
     processor = WhisperProcessor.from_pretrained(str(ADAPTER_CKPT / 'processor'))
     model     = WhisperForConditionalGeneration.from_pretrained(MODEL_ID)
@@ -114,7 +112,7 @@ def load_adapter():
     # Adapter を挿入
     layers = model.model.encoder.layers
     for i in range(len(layers)):
-        adapter  = Adapter(d_model=D_MODEL, r=r)
+        adapter  = Adapter(d_model=d_model, r=r)
         layers[i] = WhisperEncoderLayerWithAdapter(layers[i], adapter)
 
     # Adapter 重みをロード

@@ -48,7 +48,7 @@ TAPS_DIR  = BASE_DIR / 'data' / 'raw' / 'taps'
 CKPT_DIR  = BASE_DIR / 'checkpoints' / 'whisper_encoder_adapter'
 MODEL_ID  = 'openai/whisper-small'
 TARGET_SR = 16000
-D_MODEL   = 512  # Whisper small の隠れ層次元
+D_MODEL   = 768  # Whisper small の隠れ層次元（tiny=384, base=512, small=768）
 
 
 # ── Adapter モジュール ────────────────────────────────────────
@@ -80,12 +80,9 @@ class WhisperEncoderLayerWithAdapter(nn.Module):
         self.layer   = original_layer
         self.adapter = adapter
 
-    def forward(self, hidden_states, attention_mask=None,
-                layer_head_mask=None, output_attentions=False):
-        outputs      = self.layer(hidden_states, attention_mask,
-                                  layer_head_mask, output_attentions)
-        hidden_states = self.adapter(outputs[0])
-        return (hidden_states,) + outputs[1:]
+    def forward(self, hidden_states, attention_mask=None, **kwargs):
+        hidden_states = self.layer(hidden_states, attention_mask, **kwargs)
+        return self.adapter(hidden_states)
 
 
 # ── Adapterを挿入してWhisperを準備 ───────────────────────────
