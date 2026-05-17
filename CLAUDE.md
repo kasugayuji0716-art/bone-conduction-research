@@ -6,6 +6,7 @@
 
 **フェーズ1 RQ**: 「どの条件でSEが喉マイク音声のASR（Whisper）性能を悪化させるか」
 **フェーズ2 RQ**: 「Whisper smallを喉マイク音声でファインチューニングするとCERは改善するか」→ **Yes（10話者・1,000発話でCER 0.5436 → 0.1498、72.4%改善）**
+**フェーズ3 RQ**: 「韓国語TAPS喉マイクで学習したモデルはフランス語VibraVoxに転移するか、またKDはAdapter単体より改善するか」→ **転移確認済み。KD実験はDNN PC実行待ち**
 
 **主要発見（フェーズ1）**:
 - DSP・GTCRNともに全ノイズ条件でCERが悪化する
@@ -48,9 +49,9 @@
 - **重要な用語訂正**: 「4kHz以上が欠落」は不正確。正確には「8kHz収録（ナイキスト=4kHz）により、4kHz以上は収録時点から不在」。欠落（存在したものが失われた）ではなく不在（最初から存在しない）が正確
 - TAPS論文（arXiv:2502.11478、p.3）に明記: "The accelerometer was configured with 8 kHz sampling rate"、Post-processingでFourier-based resamplingを確認済み
 
-**TAPSデータセット引用状況（2026年4月時点）**
+**TAPSデータセット引用状況（2026年5月時点）**
 - 引用数: 5件（主にPOSTECHグループ）
-  - BAF-Net（Kim & Chung, Interspeech 2025）: ドメイン適合型SE-conformer → CER 84.4%→24.4%（最重要先行研究）
+  - BAF-Net（Kim & Chung, Interspeech 2025, arXiv:2508.17336）: **デュアルマイクSEフレームワーク**（後述）
   - LAU-Net（Song et al., 2025）: 喉マイク強調ネットワーク
   - その他3件: サーベイ・データセット論文
 - 外部研究者によるASR応用はほぼ未着手のフロンティア領域
@@ -117,6 +118,13 @@
 | 25_overview_slides.py | 非専門家向け概要スライド（7枚） | results/overview_slides.pptx |
 | 26_evaluate_multispeaker.py | 全10話者・4条件評価（DNN PCで実行） | results/multispeaker_*.csv |
 | 27_spectrum_analysis.py | スペクトル分析・アーティファクト可視化 | results/figures/spectrum_analysis.png |
+| 28_nir_evaluation.py | NIR（Noise Immunity Retention）計測 | results/nir_results.csv |
+| 29_finetune_whisper_adapter.py | Encoder-only Adapter学習（r=64） | checkpoints/whisper_encoder_adapter/ |
+| 30_finetune_whisper_lora.py | Encoder+Decoder LoRA学習（r=16） | checkpoints/whisper_encoder_decoder_lora/ |
+| 31_download_vibravox.py | VibraVox（仏語）ダウンロード・前処理 | data/raw/vibravox/ |
+| 32_evaluate_crosslingual.py | Cross-lingual評価（韓国語+仏語、5モデル対応） | results/crosslingual_*.csv |
+| 33_postprocess_cap_cer.py | CER cap@1.0後処理・サマリー再計算 | results/crosslingual_summary.csv（更新） |
+| 34_finetune_whisper_kd.py | **KD Adapter学習（DNN PC実行待ち）** | checkpoints/whisper_kd_adapter/ |
 
 ---
 
@@ -155,6 +163,27 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 - 評価データは学習に未使用（話者独立・発話独立）
 - 気導マイクデータはFT学習に使用していない
 
+**NIR（Noise Immunity Retention）= 1.81**
+- Pretrained Whisperのノイズ感度: 0.274
+- FT済みWhisperのノイズ感度: 0.151
+- NIR > 1.0 → クリーン音声のみでFTしてもノイズ耐性が向上（逆説的）
+
+### フェーズ3（Cross-lingual評価・cap@1.0適用後）
+
+**データ**: 韓国語TAPS test 1,000件 + 仏語VibraVox test 3,064件
+
+| モデル | Korean CER | French CER | 備考 |
+|--------|-----------|-----------|------|
+| A: Pretrained Whisper | 0.490 | 0.471 | baseline |
+| B: Full FT | 0.150 | **0.388** | French最良 |
+| C: Encoder-only Adapter | **0.147** | 0.448 | Korean最良・パラメータ効率最高 |
+| D: Enc+Dec LoRA | 0.216 | 0.422 | |
+| E: KD Adapter | — | — | **DNN PC実行待ち** |
+
+- CER > 1.0 のハルシネーション除外（French: A=5.0%、B=1.2%、C/D=1.9%）
+- 仮説「Encoder-only Adapterが仏語転移に有利」は棄却 → Full FTが仏語でも最良
+- 発見: 韓国語FTが仏語ゼロショットを改善（0.471→0.388）→ 音響適応は言語非依存の示唆
+
 ---
 
 ## フェーズ2: Whisperファインチューニングの詳細
@@ -184,96 +213,66 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 
 ## 研究の新規性・限界・今後の展望
 
-### 新規性
-1. **喉マイク特有ドメインでのSE逆効果の系統的実証**
-   - Ochiai・Mawalimらの先行研究は気導マイク対象。高周波が構造的に欠落したドメインでの検証は本研究が初
-2. **三重パラドックスの定量化**
-   - STOI↑PESQ↑CER↑が全ノイズ条件で一貫することを30条件・統計検定で示した
-3. **スペクトル分析によるメカニズムの特定**
-   - 4–8 kHz での −12.73 dB 削除という具体的な原因を実測で特定
+### 新規性の正直な評価
 
-### 限界
-1. 使用したSEモデル（GTCRN）はドメイン外学習済みモデルのみ。喉マイク向け再設計SEとの比較なし
-2. 評価データはTAPS（韓国語）のみ。他言語・他データセットへの汎化性は未検証
-3. Whisper FTはクリーン音声のみ。ノイズ下での頑健性評価が不足
-4. ペアデータ（気導マイク）を学習に活用していない
-5. 音素レベルの誤認識分析なし
+**強み（本物の発見）**:
+1. **三重パラドックス + 機構解明**（フェーズ1）: STOI↑PESQ↑CER↑が喉マイクドメインで一貫。4–8 kHz での −12.73 dB 削除というメカニズムを実測で特定。気導マイク向け先行研究（Ochiai/Mawalim）には存在しない発見
+2. **NIR=1.81**（フェーズ2）: クリーン音声のみのFTがノイズ耐性まで向上させるという逆説的結果
+3. **KD Adapter**（フェーズ3、実行待ち）: 学習時のみペアデータを使い推論時は喉マイク単体。BAF-Net（推論時もデュアルマイク必須）との明確な差別化
 
-### 今後の展望
-1. ドメイン適合型SE（Kim et al. 2025 BAF-Net）との組み合わせ
-2. Whisper large-v3 でのFT検証
-3. ノイズ下でのFT評価（MUSAN・DEMANDなど実録音ノイズ）
-4. Knowledge Distillation（気導マイクモデル → 喉マイクモデル）
-5. 音素誤認識分析による学習戦略の改善
+**懸念（査読者からの指摘リスク）**:
+- フェーズ1+2は「既存手法を新ドメインで試しただけ」という批判に弱い
+- KDが明確な改善を示せなければPhase3の貢献が消える
+- BAF-Netとは評価条件が異なりすぎて直接比較不能
+
+### 今後の方針
+- **最優先**: KD Adapter（script 34）をDNN PCで実行し結果確認
+- KDがAdapterを上回れば → 「推論時単体動作＋ペアデータ活用KD」という新規手法として論文化
+- KDが改善しなければ → フェーズ1の三重パラドックス論文（分析論文として）に絞る
+- **ターゲット会議**: ICASSP 2027（締め切り2026年9月頃）
 
 ---
 
-## フェーズ3: 最小介入学習フレームワーク（研究計画）
+## フェーズ3: KD Adapter（実装済み・DNN PC実行待ち）
 
-### 研究の動機と問題設定の再定義
+### 設計思想
 
-フェーズ1・2の発見から、問題を再定義した：
+**問題**: BAF-Net（Interspeech 2025）は推論時に喉マイク+気導マイクの両方が必要 → 喉マイクを使う動機（高ノイズ環境）と矛盾
+**提案**: 学習時のみTAPSペアデータを使い、推論時は喉マイク単体で動作するKD Adapter
 
-**従来の問題設定**: 「喉マイクの音質をどう改善するか」
-**再定義**: 「喉マイクの強みを保ちながら、最小限の介入でASR性能を引き上げるにはどうするか」
-
-喉マイクの強み: **ノイズ免疫性**（体内収録のため環境雑音が入りにくい）
-喉マイクの弱み: 4kHz以上が収録時点から不在、低域中心の音響特性
-
-→ 気導マイク向けSEを丸ごと適用（フェーズ1）は強みを損なわず弱みも埋められない
-→ Whisper全体のFT（フェーズ2）は弱みを埋めるが強みを壊す可能性がある（未検証）
-
-### 提案: Minimum Intervention Learning Framework (MILF)
-
-#### コアアーキテクチャ: Adapter + Knowledge Distillation
-
-**Adapterモジュール**（小さなボトルネックNN）:
-- Whisper Encoderの各Transformerブロック間に挿入
-- 構造: `x → Linear(512→r) → ReLU → Linear(r→512) → + x`（残差接続）
-- rはボトルネック次元（r=8〜64程度）→「介入量」を制御するハイパーパラメータ
-- 初期化: 出力層をゼロ初期化 → 学習開始時は恒等変換（何もしない）
-- **Whisperの重みは完全凍結**。学習するのはAdapterパラメータのみ（全体の約0.3%）
-- 利点: Whisperの音響知識・言語知識を破壊せず、最小限の変更でドメイン適応
-
-**知識蒸留（Knowledge Distillation）**:
-- Teacher: 気導マイク音声で動作するWhisper（凍結）
-- Student: 喉マイク音声 + Adapter挿入のWhisper
-- 同一発話のペア（TAPS）を使い、Teacherの中間表現にStudentが近づくよう学習
-- Loss = α × CER損失（テキスト正解との差） + β × 蒸留損失（Teacher-Student表現距離）
-- テキストラベルも使用（Semi-supervised的な設計）
-
-**TAPSペアデータが必須条件**: 同一発話の喉マイク+気導マイクペアが揃うTAPSは希少なデータセット
-
-#### 新提案評価指標: Noise Immunity Retention (NIR)
-
-喉マイクのノイズ免疫性がFT後も保たれているかを定量化：
+### アーキテクチャ
 
 ```
-NIR = (raw_throat_noise_sensitivity) / (ft_model_noise_sensitivity)
-noise_sensitivity = CER_noisy - CER_clean
+学習時:
+  喉マイク → Student (Whisper + Encoder Adapter) → Encoder出力S
+  気導マイク → Teacher (Pretrained Whisper, 凍結) → Encoder出力T
+  Loss = α×CE損失(デコーダ出力 vs テキスト) + β×KD損失(cosine/MSE: S vs T)
+
+推論時:
+  喉マイク単体 → Student → 書き起こし（気導マイク不要）
 ```
 
-- NIR ≈ 1.0: ノイズ免疫性が完全に保持されている
-- NIR < 1.0: FTによりノイズ免疫性が低下（過適応）
-- NIR > 1.0: ノイズ耐性がさらに向上（理想的）
+- Teacher: Pretrained Whisper-small（凍結）
+- Student: Whisper-small + Encoder Adapter（Adapterのみ学習、全体の約0.3%）
+- デフォルト: r=64, α=1.0, β=0.5, kd_loss=cosine
+- 出力: `checkpoints/whisper_kd_adapter/`
 
-フェーズ2の「クリーン音声のみでFT」がNIRに与える影響の検証が最初の実験課題。
+### BAF-Netとの差別化
 
-#### 次の実験ステップ（DNN PCで実行予定）
+| | BAF-Net | KD Adapter（提案） |
+|---|---|---|
+| 学習時 | ペアデータ使用 | ペアデータ使用 |
+| **推論時** | **喉+気導の両方必要** | **喉マイク単体のみ** |
+| ASRモデル | Whisper-large-v3-turbo | Whisper-small |
+| 評価環境 | 合成ノイズ下のみ | クリーン+ノイズ(NIR) |
 
-1. **NIR計測実験**: 既存FT済みWhisper（`checkpoints/whisper_throat_finetuned/`）に対し、
-   ノイズ付加テストデータでCER評価 → pretrained WhisperとのNIR比較
-   - 懸念: クリーン音声のみで学習したFTモデルはノイズ下で未学習Whisperより悪化する可能性
-2. **Adapterモジュール実装**: Whisper EncoderへのAdapter挿入コードを書く
-3. **蒸留ロスの実装**: Encoder中間表現のMSE距離をロスに組み込む
-4. **比較実験**: pretrained / FT-only / Adapter+KD の3条件でNIR・CER比較
-
-#### 論文としての新規性（国際会議Interspeech等を目標）
-
-1. **新しいアーキテクチャ**: Band-Specific Adapter（低域・中域・高域で異なる介入量）の可能性
-2. **新しい評価軸**: NIRメトリクスの導入（ノイズ免疫性の保持を明示的に評価）
-3. **3層の貢献**: フェーズ1（問題発見）→ フェーズ2（naive FTの限界）→ フェーズ3（解決策）という一貫したストーリー
-4. **TAPSペアデータ活用**: 同一発話ペアを用いた知識蒸留は喉マイクASRでは未報告
+### BAF-Net 実態メモ（arXiv:2508.17336 精読済み）
+- 正式名: Body-Acoustic Fusion Network
+- BMS(喉)→SE-conformer（高域復元）+ AMS(気導)→DCCRN（ノイズ除去）→ FC-Netで動的融合
+- 実際のCER: 22.2%（SNR -20dB）〜 16.7%（SNR +15dB）
+- ASRモデル: Whisper-large-v3-turbo + Korean Zeroth FTを固定使用
+- 評価は合成ノイズ下のみ（クリーン評価なし）
+- 「CER 84.4%→24.4%」という数字は誤記。実際はAMS単体86.1%→BMS SE-conformer 24.4%の対比
 
 ---
 
@@ -294,8 +293,11 @@ noise_sensitivity = CER_noisy - CER_clean
    - STOI改善・ASR悪化の乖離を実証
 3. **TAPS論文**: Kim et al., arXiv:2502.11478, 2025
    - TAPSデータセットの詳細・収録条件
-4. **BAF-Net**: Kim & Chung, Interspeech 2025
-   - TAPSでドメイン適合型SE-conformer → CER 84.4%→24.4%
+4. **BAF-Net**: Kim & Chung, Interspeech 2025, arXiv:2508.17336
+   - Body-Acoustic Fusion Network: 喉マイク+気導マイクのデュアルマイクSE
+   - **推論時も気導マイクが必須**（我々の単一マイク設定とは問題設定が異なる）
+   - Whisper-large-v3-turboを固定ASRとして使用。合成ノイズ下のみ評価
+   - CER: 22.2%（SNR -20dB）〜 16.7%（SNR +15dB）
 5. **"When De-noising Hurts"** (arXiv:2512.17562) — 参照のみ、主軸には据えない（未査読）
 
 ---
