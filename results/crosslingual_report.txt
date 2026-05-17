@@ -15,11 +15,11 @@
 --- FRENCH ---
   モデル                                 CER     ±std
   ---------------------------------------------
-  A: Pretrained Whisper            0.8201   2.2221
-  B: Full FT (Korean)              0.3762   0.3126
-  C: Encoder-only Adapter          0.4994   0.5874
-  D: Enc+Dec LoRA (Korean)         0.4337   0.4906
+  A: Pretrained Whisper            0.7400   1.8837
+  B: Full FT (Korean)              0.4312   0.7173
+  C: Encoder-only Adapter          0.5192   0.9141
+  D: Enc+Dec LoRA (Korean)         0.5240   1.3057
 
 --- 仮説検証 ---
-  ✗ 仮説棄却: Adapter の French CER (0.4994) >= Full FT (0.3762)
-    差: 0.1232
+  ✗ 仮説棄却: Adapter の French CER (0.5192) >= Full FT (0.4312)
+    差: 0.0880

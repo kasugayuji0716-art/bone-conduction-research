@@ -3,7 +3,7 @@ korean,A_pretrained,0.5436,0.5214,1000
 korean,B_full_ft,0.1498,0.0911,1000
 korean,C_adapter,0.1496,0.137,1000
 korean,D_lora,0.2202,0.1993,1000
-french,A_pretrained,0.8201,2.2221,200
-french,B_full_ft,0.3762,0.3126,200
-french,C_adapter,0.4994,0.5874,200
-french,D_lora,0.4337,0.4906,200
+french,A_pretrained,0.74,1.8837,3064
+french,B_full_ft,0.4312,0.7173,3064
+french,C_adapter,0.5192,0.9141,3064
+french,D_lora,0.524,1.3057,3064
