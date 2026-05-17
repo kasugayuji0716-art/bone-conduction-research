@@ -1,25 +1,38 @@
 ======================================================================
-  Cross-lingual Evaluation Report
+  Cross-lingual Evaluation Report  [CER capped @ 1.0]
   Training: Korean TAPS throat mic
-  Hypothesis: Encoder-only Adapter transfers better to French
+  Evaluation: Korean TAPS test (1,000) + French VibraVox test (3,064)
+  Note: CER values capped at 1.0 to remove Whisper hallucination outliers
 ======================================================================
 
 --- KOREAN ---
-  モデル                                 CER     ±std
-  ---------------------------------------------
-  A: Pretrained Whisper            0.5436   0.5214
-  B: Full FT (Korean)              0.1498   0.0911
-  C: Encoder-only Adapter          0.1496   0.1370
-  D: Enc+Dec LoRA (Korean)         0.2202   0.1993
+  モデル                                   CER     ±std   median
+  -------------------------------------------------------
+  A: Pretrained Whisper              0.4896   0.1900   0.4809
+  B: Full FT (Korean)                0.1498   0.0911   0.1350
+  C: Encoder-only Adapter            0.1469   0.0816   0.1364
+  D: Enc+Dec LoRA (Korean)           0.2159   0.1200   0.2000
 
 --- FRENCH ---
-  モデル                                 CER     ±std
-  ---------------------------------------------
-  A: Pretrained Whisper            0.7400   1.8837
-  B: Full FT (Korean)              0.4312   0.7173
-  C: Encoder-only Adapter          0.5192   0.9141
-  D: Enc+Dec LoRA (Korean)         0.5240   1.3057
+  モデル                                   CER     ±std   median
+  -------------------------------------------------------
+  A: Pretrained Whisper              0.4713   0.3004   0.4580
+  B: Full FT (Korean)                0.3883   0.2848   0.3333
+  C: Encoder-only Adapter            0.4480   0.2769   0.4400
+  D: Enc+Dec LoRA (Korean)           0.4220   0.2908   0.4000
 
---- 仮説検証 ---
-  ✗ 仮説棄却: Adapter の French CER (0.5192) >= Full FT (0.4312)
-    差: 0.0880
+--- 仮説検証 (cap@1.0) ---
+  ✗ 仮説棄却: Adapter (0.4480) >= Full FT (0.3883), 差=0.0597
+  LoRA (0.4220) >= Full FT (0.3883)
+
+--- 主要発見 ---
+  In-domain (Korean):
+    A: Pretrained Whisper           : CER=0.4896 ±0.1900
+    B: Full FT (Korean)             : CER=0.1498 ±0.0911
+    C: Encoder-only Adapter         : CER=0.1469 ±0.0816
+    D: Enc+Dec LoRA (Korean)        : CER=0.2159 ±0.1200
+  Zero-shot transfer (French):
+    A: Pretrained Whisper           : CER=0.4713 ±0.3004  median=0.4580
+    B: Full FT (Korean)             : CER=0.3883 ±0.2848  median=0.3333
+    C: Encoder-only Adapter         : CER=0.4480 ±0.2769  median=0.4400
+    D: Enc+Dec LoRA (Korean)        : CER=0.4220 ±0.2908  median=0.4000
