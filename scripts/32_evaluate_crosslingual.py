@@ -51,6 +51,7 @@ MODEL_ID         = 'openai/whisper-small'
 FT_CKPT          = BASE_DIR / 'checkpoints' / 'whisper_throat_finetuned'
 ADAPTER_CKPT     = BASE_DIR / 'checkpoints' / 'whisper_encoder_adapter'
 LORA_CKPT        = BASE_DIR / 'checkpoints' / 'whisper_encoder_decoder_lora'
+KD_CKPT          = BASE_DIR / 'checkpoints' / 'whisper_kd_adapter'
 
 D_MODEL = 768  # Whisper small（adapter_config.json からも読み込む）
 
@@ -143,6 +144,34 @@ def load_lora():
     return processor, model.eval().to(device), device
 
 
+def load_kd_adapter():
+    if not KD_CKPT.exists():
+        raise FileNotFoundError(f'KD Adapter checkpoint が見つかりません: {KD_CKPT}')
+
+    config_path = KD_CKPT / 'adapter_config.json'
+    with open(config_path) as f:
+        config = json.load(f)
+    r       = config['r']
+    d_model = config.get('d_model', D_MODEL)
+
+    processor = WhisperProcessor.from_pretrained(str(KD_CKPT / 'processor'))
+    model     = WhisperForConditionalGeneration.from_pretrained(MODEL_ID)
+
+    layers = model.model.encoder.layers
+    for i in range(len(layers)):
+        adapter  = Adapter(d_model=d_model, r=r)
+        layers[i] = WhisperEncoderLayerWithAdapter(layers[i], adapter)
+
+    adapter_state = torch.load(
+        KD_CKPT / 'adapter_weights_kd.pt',
+        map_location='cpu', weights_only=True
+    )
+    model.load_state_dict(adapter_state, strict=False)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    return processor, model.eval().to(device), device
+
+
 # ── 推論 ─────────────────────────────────────────────────────
 def transcribe(wav: np.ndarray, processor, model, device, language: str) -> str:
     feats = processor.feature_extractor(
@@ -179,10 +208,12 @@ def main():
                         help='Korean 評価サンプル数上限')
     parser.add_argument('--max_french', type=int, default=None,
                         help='French 評価サンプル数上限')
-    parser.add_argument('--skip_lora',    action='store_true',
+    parser.add_argument('--skip_lora',       action='store_true',
                         help='LoRA モデルをスキップ（未学習の場合）')
-    parser.add_argument('--skip_adapter', action='store_true',
+    parser.add_argument('--skip_adapter',    action='store_true',
                         help='Adapter モデルをスキップ（未学習の場合）')
+    parser.add_argument('--skip_kd_adapter', action='store_true',
+                        help='KD Adapter モデルをスキップ（未学習の場合）')
     args = parser.parse_args()
 
     RESULT_DIR.mkdir(exist_ok=True)
@@ -235,6 +266,13 @@ def main():
         try:
             models['D_lora'] = load_lora()
         except (FileNotFoundError, ImportError) as e:
+            print(f'     スキップ: {e}')
+
+    if not args.skip_kd_adapter:
+        print('  E: KD Adapter...')
+        try:
+            models['E_kd_adapter'] = load_kd_adapter()
+        except FileNotFoundError as e:
             print(f'     スキップ: {e}')
 
     device = next(iter(models.values()))[2]
@@ -320,10 +358,11 @@ def main():
     lines.append('=' * 70)
 
     model_labels = {
-        'A_pretrained': 'A: Pretrained Whisper',
-        'B_full_ft':    'B: Full FT (Korean)',
-        'C_adapter':    'C: Encoder-only Adapter',
-        'D_lora':       'D: Enc+Dec LoRA (Korean)',
+        'A_pretrained':  'A: Pretrained Whisper',
+        'B_full_ft':     'B: Full FT (Korean)',
+        'C_adapter':     'C: Encoder-only Adapter',
+        'D_lora':        'D: Enc+Dec LoRA (Korean)',
+        'E_kd_adapter':  'E: KD Adapter (proposed)',
     }
 
     for lang_name in ['korean', 'french']:
