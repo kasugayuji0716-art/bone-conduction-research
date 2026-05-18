@@ -6,7 +6,7 @@
 
 **フェーズ1 RQ**: 「どの条件でSEが喉マイク音声のASR（Whisper）性能を悪化させるか」
 **フェーズ2 RQ**: 「Whisper smallを喉マイク音声でファインチューニングするとCERは改善するか」→ **Yes（10話者・1,000発話でCER 0.5436 → 0.1498、72.4%改善）**
-**フェーズ3 RQ**: 「韓国語TAPS喉マイクで学習したモデルはフランス語VibraVoxに転移するか、またKDはAdapter単体より改善するか」→ **転移確認済み。KD実験はDNN PC実行待ち**
+**フェーズ3 RQ**: 「韓国語TAPS喉マイクで学習したモデルはフランス語VibraVoxに転移するか、またKDはAdapter単体より改善するか」→ **転移確認済み。KD Adapter完了（Korean微改善、French改善なし）**
 
 **主要発見（フェーズ1）**:
 - DSP・GTCRNともに全ノイズ条件でCERが悪化する
@@ -124,7 +124,7 @@
 | 31_download_vibravox.py | VibraVox（仏語）ダウンロード・前処理 | data/raw/vibravox/ |
 | 32_evaluate_crosslingual.py | Cross-lingual評価（韓国語+仏語、5モデル対応） | results/crosslingual_*.csv |
 | 33_postprocess_cap_cer.py | CER cap@1.0後処理・サマリー再計算 | results/crosslingual_summary.csv（更新） |
-| 34_finetune_whisper_kd.py | **KD Adapter学習（DNN PC実行待ち）** | checkpoints/whisper_kd_adapter/ |
+| 34_finetune_whisper_kd.py | KD Adapter学習（epoch6で停止、Best Dev CER=0.1448） | checkpoints/whisper_kd_adapter/ |
 
 ---
 
@@ -172,16 +172,18 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 
 **データ**: 韓国語TAPS test 1,000件 + 仏語VibraVox test 3,064件
 
-| モデル | Korean CER | French CER | 備考 |
-|--------|-----------|-----------|------|
-| A: Pretrained Whisper | 0.490 | 0.471 | baseline |
-| B: Full FT | 0.150 | **0.388** | French最良 |
-| C: Encoder-only Adapter | **0.147** | 0.448 | Korean最良・パラメータ効率最高 |
-| D: Enc+Dec LoRA | 0.216 | 0.422 | |
-| E: KD Adapter | — | — | **DNN PC実行待ち** |
+| モデル | Korean CER | Korean std | French CER | French std |
+|--------|-----------|-----------|-----------|-----------|
+| A: Pretrained Whisper | 0.4896 | 0.190 | 0.4713 | 0.300 |
+| B: Full FT | 0.1498 | 0.091 | **0.3883** | 0.285 |
+| C: Encoder-only Adapter | 0.1469 | 0.082 | 0.4480 | 0.277 |
+| D: Enc+Dec LoRA | 0.2159 | 0.120 | 0.4220 | 0.291 |
+| **E: KD Adapter** | **0.1455** | **0.079** | 0.4524 | 0.284 |
 
-- CER > 1.0 のハルシネーション除外（French: A=5.0%、B=1.2%、C/D=1.9%）
+- CER cap@1.0適用済み（French: A=5.0%、B=1.2%、C/D/E=1.9%がハルシネーション除外）
 - 仮説「Encoder-only Adapterが仏語転移に有利」は棄却 → Full FTが仏語でも最良
+- Korean最良: KD Adapter（0.1455）、stdも最小（0.079）→ 最も安定
+- KD Adapterの仏語: Adapterよりわずかに悪化（0.4480→0.4524）→ KDが仏語転移を改善しない
 - 発見: 韓国語FTが仏語ゼロショットを改善（0.471→0.388）→ 音響適応は言語非依存の示唆
 
 ---
@@ -218,44 +220,66 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 **強み（本物の発見）**:
 1. **三重パラドックス + 機構解明**（フェーズ1）: STOI↑PESQ↑CER↑が喉マイクドメインで一貫。4–8 kHz での −12.73 dB 削除というメカニズムを実測で特定。気導マイク向け先行研究（Ochiai/Mawalim）には存在しない発見
 2. **NIR=1.81**（フェーズ2）: クリーン音声のみのFTがノイズ耐性まで向上させるという逆説的結果
-3. **KD Adapter**（フェーズ3、実行待ち）: 学習時のみペアデータを使い推論時は喉マイク単体。BAF-Net（推論時もデュアルマイク必須）との明確な差別化
+3. **Cross-lingual transfer**（フェーズ3）: 韓国語FTが仏語ゼロショットを改善（CER 0.471→0.388）→ 音響適応の言語非依存性を示唆
+
+**KD Adapterの結果と評価**:
+- Korean: Adapter 0.1469 → KD Adapter **0.1455**（微改善、std最小）
+- French: Adapter 0.4480 → KD Adapter 0.4524（悪化）
+- 原因: KD損失がCE損失の1/50と小さく実質的に効いていなかった（β=0.5でもCEが支配）
+- Teacher（Pretrained Whisper）がTAPSを知らないため引き寄せる方向が不明確
+- **結論: 現設計のKDでは明確な優位性を示せなかった**
 
 **懸念（査読者からの指摘リスク）**:
-- フェーズ1+2は「既存手法を新ドメインで試しただけ」という批判に弱い
-- KDが明確な改善を示せなければPhase3の貢献が消える
+- 全フェーズを通じて「既存手法を新ドメインで試しただけ」という批判に弱い
+- KDが改善を示せなかった → フェーズ3の手法的貢献が薄い
 - BAF-Netとは評価条件が異なりすぎて直接比較不能
 
 ### 今後の方針
-- **最優先**: KD Adapter（script 34）をDNN PCで実行し結果確認
-- KDがAdapterを上回れば → 「推論時単体動作＋ペアデータ活用KD」という新規手法として論文化
-- KDが改善しなければ → フェーズ1の三重パラドックス論文（分析論文として）に絞る
+- **現実的な路線**: フェーズ1（三重パラドックス＋機構解明）を中心とした分析論文
+- フェーズ2（FT有効性＋NIR=1.81）を解決策として組み合わせる
+- フェーズ3は「FTの言語非依存性」をサブ発見として添える（KDは現状では弱い）
+- KDを続けるなら: β拡大・Teacher変更（FT済みWhisper）・Layer-wise KDが改善候補
 - **ターゲット会議**: ICASSP 2027（締め切り2026年9月頃）
 
 ---
 
-## フェーズ3: KD Adapter（実装済み・DNN PC実行待ち）
+## フェーズ3: KD Adapter（実装・実行完了）
 
 ### 設計思想
 
 **問題**: BAF-Net（Interspeech 2025）は推論時に喉マイク+気導マイクの両方が必要 → 喉マイクを使う動機（高ノイズ環境）と矛盾
 **提案**: 学習時のみTAPSペアデータを使い、推論時は喉マイク単体で動作するKD Adapter
 
-### アーキテクチャ
+### アーキテクチャ・学習設定
 
 ```
 学習時:
   喉マイク → Student (Whisper + Encoder Adapter) → Encoder出力S
   気導マイク → Teacher (Pretrained Whisper, 凍結) → Encoder出力T
-  Loss = α×CE損失(デコーダ出力 vs テキスト) + β×KD損失(cosine/MSE: S vs T)
+  Loss = 1.0×CE損失(デコーダ出力 vs テキスト) + 0.5×KD損失(cosine: S vs T)
 
 推論時:
   喉マイク単体 → Student → 書き起こし（気導マイク不要）
 ```
 
 - Teacher: Pretrained Whisper-small（凍結）
-- Student: Whisper-small + Encoder Adapter（Adapterのみ学習、全体の約0.3%）
-- デフォルト: r=64, α=1.0, β=0.5, kd_loss=cosine
+- Student: Whisper-small + Encoder Adapter（Adapterのみ学習、全体の0.5%）
+- r=64, α=1.0, β=0.5, kd_loss=cosine, lr=1e-3
+- epoch6でearly stopping、Best Dev CER=0.1448
 - 出力: `checkpoints/whisper_kd_adapter/`
+
+### 学習ログ要約
+
+| Epoch | CE損失 | KD損失 | Dev CER |
+|---|---|---|---|
+| 1 | 1.011 | 0.009 | 0.1756 |
+| 2 | 0.420 | 0.003 | 0.1579 |
+| **3** | **0.288** | **0.002** | **0.1448** ← best |
+| 4 | 0.205 | 0.002 | 0.1504 |
+| 5 | 0.146 | 0.002 | 0.1471 |
+| 6 | 0.106 | 0.002 | 0.1455 → early stop |
+
+KD損失はCE損失の約1/50と極めて小さく、実質的にAdapterのみの学習に近い状態だった。
 
 ### BAF-Netとの差別化
 
