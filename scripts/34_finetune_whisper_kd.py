@@ -201,8 +201,9 @@ class EncoderOutputHook:
         self.output = None
 
     def hook_fn(self, module, input, output):
-        # output は (last_hidden_state,) のタプルまたはテンソル
-        if isinstance(output, tuple):
+        if hasattr(output, 'last_hidden_state'):
+            self.output = output.last_hidden_state
+        elif isinstance(output, tuple):
             self.output = output[0]
         else:
             self.output = output

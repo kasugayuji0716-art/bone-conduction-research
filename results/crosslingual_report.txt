@@ -12,6 +12,7 @@
   B: Full FT (Korean)                0.1498   0.0911   0.1350
   C: Encoder-only Adapter            0.1469   0.0816   0.1364
   D: Enc+Dec LoRA (Korean)           0.2159   0.1200   0.2000
+  E_kd_adapter                       0.1455   0.0793   0.1381
 
 --- FRENCH ---
   モデル                                   CER     ±std   median
@@ -20,6 +21,7 @@
   B: Full FT (Korean)                0.3883   0.2848   0.3333
   C: Encoder-only Adapter            0.4480   0.2769   0.4400
   D: Enc+Dec LoRA (Korean)           0.4220   0.2908   0.4000
+  E_kd_adapter                       0.4524   0.2835   0.4658
 
 --- 仮説検証 (cap@1.0) ---
   ✗ 仮説棄却: Adapter (0.4480) >= Full FT (0.3883), 差=0.0597
@@ -31,8 +33,10 @@
     B: Full FT (Korean)             : CER=0.1498 ±0.0911
     C: Encoder-only Adapter         : CER=0.1469 ±0.0816
     D: Enc+Dec LoRA (Korean)        : CER=0.2159 ±0.1200
+    E_kd_adapter                    : CER=0.1455 ±0.0793
   Zero-shot transfer (French):
     A: Pretrained Whisper           : CER=0.4713 ±0.3004  median=0.4580
     B: Full FT (Korean)             : CER=0.3883 ±0.2848  median=0.3333
     C: Encoder-only Adapter         : CER=0.4480 ±0.2769  median=0.4400
     D: Enc+Dec LoRA (Korean)        : CER=0.4220 ±0.2908  median=0.4000
+    E_kd_adapter                    : CER=0.4524 ±0.2835  median=0.4658
