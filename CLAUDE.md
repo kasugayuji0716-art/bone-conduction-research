@@ -2,11 +2,12 @@
 
 ## 研究概要
 
-**テーマ**: 喉マイク（骨伝導マイク）音声に対するSpeech Enhancement（SE）がWhisperのCERに与える影響の定量的評価、および喉マイク特化モデルの開発
+**統一RQ**: 「喉マイク音声のASR改善には、音声強調（SE→ASR）とASRモデル適応（FT/PEFT）のどちらが有効か」
+→ **結論: ASRモデル適応が圧倒的に有効（CER 0.54→0.15、72.4%改善）。SEは全条件で逆効果**
 
-**フェーズ1 RQ**: 「どの条件でSEが喉マイク音声のASR（Whisper）性能を悪化させるか」
-**フェーズ2 RQ**: 「Whisper smallを喉マイク音声でファインチューニングするとCERは改善するか」→ **Yes（10話者・1,000発話でCER 0.5436 → 0.1498、72.4%改善）**
-**フェーズ3 RQ**: 「韓国語TAPS喉マイクで学習したモデルはフランス語VibraVoxに転移するか、またKDはAdapter単体より改善するか」→ **転移確認済み。KD Adapter完了（Korean微改善、French改善なし）**
+**フェーズ1**: SE→ASRパイプラインの評価 → 全34条件でCER悪化。三重パラドックス確認
+**フェーズ2**: ASRモデル適応の評価 → Full FT: CER 72.4%改善、Adapter: 0.5%パラメータで同等精度
+**フェーズ3**: 言語間転移・PEFT比較 → 韓国語FTが仏語も改善（0.47→0.39）。KD v1・v2失敗→打ち切り
 
 **主要発見（フェーズ1）**:
 - DSP・GTCRNともに全ノイズ条件でCERが悪化する
@@ -124,7 +125,20 @@
 | 31_download_vibravox.py | VibraVox（仏語）ダウンロード・前処理 | data/raw/vibravox/ |
 | 32_evaluate_crosslingual.py | Cross-lingual評価（韓国語+仏語、5モデル対応） | results/crosslingual_*.csv |
 | 33_postprocess_cap_cer.py | CER cap@1.0後処理・サマリー再計算 | results/crosslingual_summary.csv（更新） |
-| 34_finetune_whisper_kd.py | KD Adapter学習（epoch6で停止、Best Dev CER=0.1448） | checkpoints/whisper_kd_adapter/ |
+| 34_finetune_whisper_kd.py | KD Adapter v1学習（epoch6で停止、Best Dev CER=0.1448） | checkpoints/whisper_kd_adapter/ |
+| 35_finetune_whisper_acoustic.py | 気導マイクWhisper FT（KD v2のTeacher用） | checkpoints/whisper_acoustic_finetuned/ |
+| 36_finetune_whisper_kd_v2.py | KD Adapter v2学習（β=2.0、acoustic teacher、Best Dev CER=0.1407） | checkpoints/whisper_kd_adapter_v2/ |
+| research_progress_slides.js | 研究進捗スライド（12枚、pptxgenjs） | results/research_progress.pptx |
+
+### 成果物（文書）
+
+| ファイル | 内容 |
+|---|---|
+| 2027年度_研究計画書.docx | 大学院研究計画書（最新版、図・参考文献付き） |
+| results/research_progress.pptx | 仮説検証フロー整理スライド（12枚、スピーカーノート付き） |
+| results/slides.pptx | 研究紹介スライド（29枚） |
+| results/overview_slides.pptx | 非専門家向け概要スライド（7枚） |
+| results/figures/research_overview.png | SE vs ASR適応の2アプローチ比較図 |
 
 ---
 
@@ -215,31 +229,55 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 
 ## 研究の新規性・限界・今後の展望
 
-### 新規性の正直な評価
+### 新規性の正直な評価（2026年5月時点）
 
-**強み（本物の発見）**:
-1. **三重パラドックス + 機構解明**（フェーズ1）: STOI↑PESQ↑CER↑が喉マイクドメインで一貫。4–8 kHz での −12.73 dB 削除というメカニズムを実測で特定。気導マイク向け先行研究（Ochiai/Mawalim）には存在しない発見
-2. **NIR=1.81**（フェーズ2）: クリーン音声のみのFTがノイズ耐性まで向上させるという逆説的結果
-3. **Cross-lingual transfer**（フェーズ3）: 韓国語FTが仏語ゼロショットを改善（CER 0.471→0.388）→ 音響適応の言語非依存性を示唆
+**各発見の新規性レベル**:
 
-**KD Adapterの結果と評価**:
-- Korean: Adapter 0.1469 → KD Adapter **0.1455**（微改善、std最小）
-- French: Adapter 0.4480 → KD Adapter 0.4524（悪化）
-- 原因: KD損失がCE損失の1/50と小さく実質的に効いていなかった（β=0.5でもCEが支配）
-- Teacher（Pretrained Whisper）がTAPSを知らないため引き寄せる方向が不明確
-- **結論: 現設計のKDでは明確な優位性を示せなかった**
+| 主張 | 新規性 | 正直な評価 |
+|---|---|---|
+| 三重パラドックス（喉マイク版） | **低** | 気導マイクで既知（Ochiai TASLP 2024、Mawalim Interspeech 2024）。喉マイクでの再確認に過ぎない |
+| スペクトル分析による機構解明 | **中** | 4–8kHz −12.73dB削除の実測は喉マイク固有。ただし「SEがASRに有害な周波数を削る」という概念はOPD枠組みで既出 |
+| FTでCER 72.4%改善 | **低** | Whisper FTは広く知られた手法。喉マイクでの実証は新しいが手法的新規性なし |
+| NIR=1.81 | **低〜中** | FT後のベースラインCER差から来る数学的帰結の可能性。本質的にノイズ耐性が向上したかは要検証 |
+| Cross-lingual transfer | **中** | 韓国語FTが仏語を改善（0.471→0.388）は興味深いが、音響適応の言語非依存性自体は他ドメインで報告あり |
+| KD Adapter | **失敗** | v1・v2ともにKD損失が効かず、実質Adapterのみ。手法提案として成立しない |
 
-**懸念（査読者からの指摘リスク）**:
+**喉マイク × 電話音声（狭帯域ASR）との関係**:
+- 電話音声（8kHz収録、4kHz以上不在）と信号レベルで類似
+- ただし電話音声研究では「SEとASRの関係」はほぼ分析されていない
+- 電話音声研究は「大量データFTで解決」が主流、SE+ASRの乖離は研究の隙間
+
+**喉マイクの物理的特性**:
+- 骨伝導は物理的ローパスフィルタ（3〜4kHz以上で大幅減衰）
+- これはハードウェア限界であり、どの喉マイクでも共通
+- TAPS 8kHz設定はこの物理限界に合わせた合理的選択
+
+**検討・棄却したアプローチ**:
+- Conv1D前アダプタ（mel入力レベル周波数アダプタ）: 検討→棄却
+  - 理由: 高域binは既に≈0、ゲインを掛けても0×gain≈0。Full FTがConv1D重みで既に学習済み。160パラメータの線形変換は入力正規化と等価で新規性なし
+
+**懸念（査読者・教授からの指摘リスク）**:
 - 全フェーズを通じて「既存手法を新ドメインで試しただけ」という批判に弱い
-- KDが改善を示せなかった → フェーズ3の手法的貢献が薄い
+- KDが2回失敗 → 手法提案としての柱がない
 - BAF-Netとは評価条件が異なりすぎて直接比較不能
+- 三重パラドックスは気導マイクで既知現象の追認
+- **SE vs FT比較の公平性問題**: SEは音声品質改善が目的でASR最適化ではない。FTはASR損失を直接最適化。「FTが勝って当然」と言われるリスク
+- **72.4%改善の解釈**: Pretrained WhisperのCER 0.54自体がOODで異常に高い。in-domain FTで下がるのは当然の帰結
+- **「言語非依存音響適応」の主張の飛躍**: Full FTはDecoderも変更しており、Encoder-only Adapterの仏語CERは0.448でFull FTの0.388より大幅劣後。Encoder側の音響適応だけでは言語間転移は不十分であり、Decoder変更の貢献を分離できていない
+- **日本語検証の具体性不足**: 収録計画（マイク・話者数・発話数・環境・テキスト）が未定
 
-### 今後の方針
-- **現実的な路線**: フェーズ1（三重パラドックス＋機構解明）を中心とした分析論文
-- フェーズ2（FT有効性＋NIR=1.81）を解決策として組み合わせる
-- フェーズ3は「FTの言語非依存性」をサブ発見として添える（KDは現状では弱い）
-- KDを続けるなら: β拡大・Teacher変更（FT済みWhisper）・Layer-wise KDが改善候補
-- **ターゲット会議**: ICASSP 2027（締め切り2026年9月頃）
+### 今後の方針（2027年度研究計画書に準拠）
+- **KDアプローチは打ち切り**（v1・v2で2回失敗）
+- **修士論文の方向性**: SE→ASR vs ASRモデル適応の体系的比較研究
+  - TAPSベースラインSE（Demucs・SE-conformer・TSTNN）を公開コードで再現し、FT/Adapterと同一条件で公平比較
+  - 日本語喉マイク音声での追加言語間転移検証
+  - 上記を含む修士論文としてまとめ、併せて国際会議投稿を検討
+- **次にやるべき実験**: TAPSベースラインSEの再現（taps-baselines GitHubリポジトリ利用）
+
+### 喉マイク→気導マイク変換の関連研究（2026年5月調査）
+- TAPS論文自身がベースライン変換実験を含む: Demucs(mapping) > TSTNN(masking) for CER
+- arXiv:2508.02974 (Hauret et al., 2025): VibraVoxでMimi（Neural Audio Codec）をFTしリアルタイム変換
+- 本研究との関係: 先行研究はSE側アプローチ、本研究はASR側適応。同一データでの直接比較が未踏
 
 ---
 
@@ -281,6 +319,30 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 
 KD損失はCE損失の約1/50と極めて小さく、実質的にAdapterのみの学習に近い状態だった。
 
+### KD Adapter v2（改良版・scripts 35+36）
+
+**v1の問題点と改善策**:
+- Teacher（Pretrained Whisper）がTAPSドメインを知らない → 気導マイクFT済みWhisperをTeacherに変更
+- β=0.5では弱い → β=2.0に拡大
+
+**v2 学習ログ**:
+
+| Epoch | CE損失 | KD損失 | KD/CE比 | Dev CER |
+|---|---|---|---|---|
+| 1 | 1.006 | 0.0030 | 0.003 | 0.1754 |
+| 2 | 0.419 | 0.0009 | 0.002 | 0.1591 |
+| 3 | 0.287 | 0.0008 | 0.003 | 0.1500 |
+| **4** | **0.204** | **0.0007** | **0.004** | **0.1407** ← best |
+| 5 | 0.148 | 0.0007 | 0.005 | 0.1434 |
+| 6 | 0.109 | 0.0007 | 0.006 | 0.1491 |
+| 7 | 0.080 | 0.0006 | 0.008 | 0.1527 → early stop |
+
+**v2の結論: KDは依然として効いていない**
+- KD/CE比: 0.3〜0.8%（v1の2%と同水準、β=2.0に上げても改善せず）
+- Dev CER 0.1407 vs v1の0.1448 → 微改善だがKDの貢献かは不明
+- Teacher変更・β拡大の両方を試しても本質的にKD損失の絶対値が小さすぎる
+- **KDアプローチは2回試行して2回とも失敗。この方向での追加投資は打ち切り**
+
 ### BAF-Netとの差別化
 
 | | BAF-Net | KD Adapter（提案） |
@@ -315,14 +377,22 @@ KD損失はCE損失の約1/50と極めて小さく、実質的にAdapterのみ�
    - Artifact errorがSE逆効果の主因と特定（OPD枠組み）
 2. **Interspeech 2024**: Mawalim, Okada, Unoki (JAIST), "Are Recent Deep Learning-Based Speech Enhancement Methods Ready to Confront Real-World Noisy Environments?" (DOI: 10.21437/Interspeech.2024-129)
    - STOI改善・ASR悪化の乖離を実証
-3. **TAPS論文**: Kim et al., arXiv:2502.11478, 2025
+3. **TAPS論文**: Kim et al., Scientific Data (Nature), 2026 (arXiv:2502.11478)
    - TAPSデータセットの詳細・収録条件
+   - ベースラインSEモデル（Demucs / SE-conformer / TSTNN）の評価含む
+   - 公開コード: github.com/yskim3271/taps-baselines
 4. **BAF-Net**: Kim & Chung, Interspeech 2025, arXiv:2508.17336
    - Body-Acoustic Fusion Network: 喉マイク+気導マイクのデュアルマイクSE
    - **推論時も気導マイクが必須**（我々の単一マイク設定とは問題設定が異なる）
    - Whisper-large-v3-turboを固定ASRとして使用。合成ノイズ下のみ評価
    - CER: 22.2%（SNR -20dB）〜 16.7%（SNR +15dB）
 5. **"When De-noising Hurts"** (arXiv:2512.17562) — 参照のみ、主軸には据えない（未査読）
+6. **VibraVox**: Hauret et al., Interspeech 2024 (doi:10.21437/Interspeech.2024-1797)
+   - フランス語体内収録音声188話者・45時間、CC-BY-4.0
+7. **Adapter原論文**: Houlsby et al., "Parameter-Efficient Transfer Learning for NLP," ICML 2019
+8. **LoRA原論文**: Hu et al., "LoRA: Low-Rank Adaptation of Large Language Models," ICLR 2022
+9. **リアルタイム喉マイクSE**: Hauret et al., arXiv:2508.02974, 2025
+   - VibraVoxでMimi（Neural Audio Codec）をFT、リアルタイム喉→気導変換
 
 ---
 
