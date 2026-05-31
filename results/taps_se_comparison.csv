@@ -1,13 +1,13 @@
 asr,se,cer,n
 Pretrained,No SE,0.4712,1000
-Pretrained,SE:demucs,1.0,1000
-Pretrained,SE:seconformer,1.0,1000
+Pretrained,SE:demucs,0.27827701332334864,1000
+Pretrained,SE:seconformer,0.5795656650753533,1000
 Pretrained,SE:tstnn,0.4728,1000
 FT,No SE,0.1364,1000
-FT,SE:demucs,1.0,1000
-FT,SE:seconformer,1.0,1000
+FT,SE:demucs,0.1704265343692471,1000
+FT,SE:seconformer,0.42644076258229585,1000
 FT,SE:tstnn,0.1367,1000
 Adapter,No SE,0.149,1000
-Adapter,SE:demucs,1.0,1000
-Adapter,SE:seconformer,1.0,1000
+Adapter,SE:demucs,0.2176042934256919,1000
+Adapter,SE:seconformer,0.6202533620393772,1000
 Adapter,SE:tstnn,0.14647882929264563,1000

@@ -20,6 +20,11 @@ from jiwer import cer
 from faster_whisper import WhisperModel as FasterWhisperModel
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
+# taps-baselines公式モデルコードをパスに追加
+_TAPS_BASELINES = Path(__file__).parent.parent / 'taps-baselines'
+if str(_TAPS_BASELINES) not in sys.path:
+    sys.path.insert(0, str(_TAPS_BASELINES))
+
 # ─── パス ────────────────────────────────────────────────────
 BASE_DIR       = Path(__file__).parent.parent
 TAPS_DIR       = BASE_DIR / 'data' / 'raw' / 'taps'
@@ -175,7 +180,7 @@ class SEConformerModel(nn.Module):
     K  = 8
     S  = 4
 
-    def __init__(self, heads=8, n_conf=4):
+    def __init__(self, heads=4, n_conf=4):
         super().__init__()
         enc, dec = nn.ModuleList(), nn.ModuleList()
         for i in range(4):
@@ -194,27 +199,57 @@ class SEConformerModel(nn.Module):
                 nn.ReLU(),
                 nn.ConvTranspose1d(ic, max(oc, 1), self.K, stride=self.S),
             ))
-        self.encoder   = enc
+        self.encoder    = enc
         self.conformers = nn.ModuleList([_SEConformerBlock(self.CH[-1], heads) for _ in range(n_conf)])
-        self.decoder   = dec
+        self.decoder    = dec
 
-    def forward(self, x):           # x: (B, 1, T)
-        T = x.shape[-1]
-        skips, h = [], x
+    RESAMPLE = 4   # training config: resample=4
+    FLOOR    = 1e-3
+
+    def valid_length(self, length: int) -> int:
+        length = math.ceil(length * self.RESAMPLE)
+        for _ in range(len(self.CH) - 1):
+            length = math.ceil((length - self.K) / self.S) + 1
+            length = max(length, 1)
+        for _ in range(len(self.CH) - 1):
+            length = (length - 1) * self.S + self.K
+        return int(math.ceil(length / self.RESAMPLE))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:   # x: (B, 1, T)
+        from models.demucs import upsample2, downsample2
+        if x.dim() == 2:
+            x = x.unsqueeze(1)
+        mono = x.mean(dim=1, keepdim=True)
+        std  = mono.std(dim=-1, keepdim=True)
+        x    = x / (self.FLOOR + std)
+        length = x.shape[-1]
+        x = F.pad(x, (0, self.valid_length(length) - length))
+        if self.RESAMPLE >= 2:
+            x = upsample2(x)
+        if self.RESAMPLE == 4:
+            x = upsample2(x)
+
+        skips = []
         for enc in self.encoder:
-            h = enc(h)
-            skips.append(h)
+            x = enc(x)
+            skips.append(x)
 
-        # Conformers on flattened time axis
-        h = h.permute(0, 2, 1)     # (B, T', 512)
+        x = x.permute(0, 2, 1)     # (B, T', 512)
         for conf in self.conformers:
-            h = conf(h)
-        h = h.permute(0, 2, 1)     # (B, 512, T')
+            x = conf(x)
+        x = x.permute(0, 2, 1)     # (B, 512, T')
 
-        for i, dec in enumerate(self.decoder):
-            h = dec(h)
+        for dec in self.decoder:
+            skip = skips.pop(-1)
+            x = x + skip[..., :x.shape[-1]]  # additive skip connection
+            x = dec(x)
 
-        return h[..., :T]
+        if self.RESAMPLE == 4:
+            x = downsample2(x)
+        if self.RESAMPLE >= 2:
+            x = downsample2(x)
+        x = x[..., :length]
+        return std * x
 
 
 # ══════════════════════════════════════════════════════════════
@@ -389,20 +424,14 @@ def _load_ckpt(model: nn.Module, path: Path, label: str) -> bool:
 def load_se_models(device: torch.device, no_custom_ckpt=False) -> dict:
     models = {}
 
-    # Demucs
+    # Demucs（公式コード: hidden=64, causal=False, stride=2, resample=2）
     print('  Demucs ...')
     demucs_ckpt = PRETRAINED_DIR / 'demucs.th'
     if demucs_ckpt.exists() and not no_custom_ckpt:
-        dm = ConvDemucs()
+        from models.demucs import demucs as DemucsModel
+        dm = DemucsModel(hidden=64, causal=False, stride=2, resample=2)
         if _load_ckpt(dm, demucs_ckpt, 'Demucs'):
             models['demucs'] = ('demucs', dm.eval().to(device))
-    if 'demucs' not in models:
-        print('  Demucs: htdemucs (デフォルト事前学習済み) にフォールバック')
-        try:
-            from demucs.pretrained import get_model
-            models['demucs'] = ('htdemucs', get_model('htdemucs').eval().to(device))
-        except Exception as e:
-            print(f'  [スキップ] Demucs htdemucs: {e}')
 
     # SE-Conformer
     print('  SE-Conformer ...')

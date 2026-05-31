@@ -31,3 +31,13 @@ results/summary_partial.csv
 # ── 個人録音ファイル（data/raw直下のwav） ───────────────────────
 data/raw/*.wav
 data/raw/**/*.wav
+
+# ── TAPSベースライン（チェックポイントは容量大、ソースはクローン済み） ──
+taps-baselines/pretrained/
+taps-baselines-src/
+
+# ── VibraVoxデータセット ─────────────────────────────────────────
+data/raw/vibravox/
+
+# ── ログファイル ─────────────────────────────────────────────────
+logs/*.log
