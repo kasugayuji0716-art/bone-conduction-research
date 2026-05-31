@@ -3,11 +3,12 @@
 ## 研究概要
 
 **統一RQ**: 「喉マイク音声のASR改善には、音声強調（SE→ASR）とASRモデル適応（FT/PEFT）のどちらが有効か」
-→ **結論: ASRモデル適応が圧倒的に有効（CER 0.54→0.15、72.4%改善）。SEは全条件で逆効果**
+→ **結論: ASRモデル適応が圧倒的に有効（CER 0.54→0.15、72.4%改善）。ドメイン外SEは全条件で逆効果。ドメイン適合SEは未適応ASRを改善するが（0.47→0.25）、FT済みASRには逆効果かつFT単体（0.14）に及ばず**
 
-**フェーズ1**: SE→ASRパイプラインの評価 → 全34条件でCER悪化。三重パラドックス確認
+**フェーズ1**: SE→ASRパイプライン評価（気導マイク向けSE） → 全34条件でCER悪化。三重パラドックス確認
 **フェーズ2**: ASRモデル適応の評価 → Full FT: CER 72.4%改善、Adapter: 0.5%パラメータで同等精度
 **フェーズ3**: 言語間転移・PEFT比較 → 韓国語FTが仏語も改善（0.47→0.39）。KD v1・v2失敗→打ち切り
+**フェーズ4**: TAPSベースラインSE（喉マイク向け）×ASRモデル3種の公平比較完了 → 設計原則導出
 
 **主要発見（フェーズ1）**:
 - DSP・GTCRNともに全ノイズ条件でCERが悪化する
@@ -129,12 +130,14 @@
 | 35_finetune_whisper_acoustic.py | 気導マイクWhisper FT（KD v2のTeacher用） | checkpoints/whisper_acoustic_finetuned/ |
 | 36_finetune_whisper_kd_v2.py | KD Adapter v2学習（β=2.0、acoustic teacher、Best Dev CER=0.1407） | checkpoints/whisper_kd_adapter_v2/ |
 | research_progress_slides.js | 研究進捗スライド（12枚、pptxgenjs） | results/research_progress.pptx |
+| 37_evaluate_taps_se_baselines.py | TAPSベースラインSE（Demucs/SE-Conformer/TSTNN）×ASRモデル3種の公平比較（DNN PCで実行） | results/taps_se_comparison.csv |
 
 ### 成果物（文書）
 
 | ファイル | 内容 |
 |---|---|
-| 2027年度_研究計画書.docx | 大学院研究計画書（最新版、図・参考文献付き） |
+| 2027年度_研究計画書_春日裕次_第6稿.docx | 大学院研究計画書（最新版・第6稿、矛盾修正・設計原則明示済み） |
+| 2027年度_研究計画書.docx | 大学院研究計画書（旧版） |
 | results/research_progress.pptx | 仮説検証フロー整理スライド（12枚、スピーカーノート付き） |
 | results/slides.pptx | 研究紹介スライド（29枚） |
 | results/overview_slides.pptx | 非専門家向け概要スライド（7枚） |
@@ -199,6 +202,46 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 - Korean最良: KD Adapter（0.1455）、stdも最小（0.079）→ 最も安定
 - KD Adapterの仏語: Adapterよりわずかに悪化（0.4480→0.4524）→ KDが仏語転移を改善しない
 - 発見: 韓国語FTが仏語ゼロショットを改善（0.471→0.388）→ 音響適応は言語非依存の示唆
+
+### フェーズ4（TAPSベースラインSE × ASRモデル公平比較）
+
+**データ**: TAPS test 1,000発話（全10話者）
+
+| ASRモデル | SE | CER |
+|---|---|---|
+| Pretrained Whisper | No SE | 0.471 |
+| Pretrained Whisper | SE:Demucs | 0.278 |
+| Pretrained Whisper | **SE:SE-Conformer** | **0.253** |
+| Pretrained Whisper | SE:TSTNN | 0.473 |
+| **FT済みWhisper** | **No SE** | **0.136** |
+| FT済みWhisper | SE:SE-Conformer | 0.143 |
+| FT済みWhisper | SE:TSTNN | 0.137 |
+| Encoder Adapter | No SE | 0.149 |
+| Encoder Adapter | SE:SE-Conformer | 0.187 |
+
+**主要な発見**:
+- ドメイン適合SE（SE-Conformer）は未適応Whisperを大幅改善（0.47→0.25）するが、FT単体（0.136）に及ばない
+- FT済みWhisperにSEを適用すると逆効果（0.136→0.143）：FTが学習した喉マイク信号特性をSEが変換するため
+- TSTNN（マスキング型）はほぼ効果なし（0.471→0.473、誤差範囲）
+- Demucs（マッピング型）は中程度の改善（0.471→0.278）
+
+**OOD度による統一的解釈**:
+- SEがASRを改善するかはASRモデルへの入力のOOD度に依存する
+- 未適応Whisper（気導学習）に喉マイク（OOD）→ ドメイン適合SEがOODを緩和 → 改善
+- FT済みWhisper（喉マイク適応済み）→ 喉マイクがin-domain → SEが信号を変えると悪化
+- 先行研究（Ochiai/Mawalim）が気導マイクでSE逆効果を確認したのも同原理（気導Whisper×気導音声=in-domain）
+
+---
+
+## 設計原則（実験から導出）
+
+**原則1（適用条件）**: ASR未適応モデルに対してはドメイン適合SEが一定の改善をもたらすが、ASR適応済みモデルに対してはSEが逆効果となる。
+
+**原則2（最適化目標）**: 知覚品質指標（STOI・PESQ）の改善はCERの改善と必ずしも一致しない。ASR精度改善が目的なら、ASR損失を直接最適化するモデル適応が有効。
+
+**原則3（組み合わせ）**: SEとASRモデル適応は相補的でなく競合的。両者を組み合わせるとモデル適応単体より精度が低下する（FT単体0.136 < FT+SE-Conformer 0.143）。
+
+**原則4（軽量化）**: 全パラメータFTと同等の精度が0.5%パラメータ更新（Encoder-only Adapter）で達成できる。
 
 ---
 
@@ -266,13 +309,14 @@ gtcrn/white/snr_+0dB        1.214  ← SNR 0dBで最大悪化
 - **「言語非依存音響適応」の主張の飛躍**: Full FTはDecoderも変更しており、Encoder-only Adapterの仏語CERは0.448でFull FTの0.388より大幅劣後。Encoder側の音響適応だけでは言語間転移は不十分であり、Decoder変更の貢献を分離できていない
 - **日本語検証の具体性不足**: 収録計画（マイク・話者数・発話数・環境・テキスト）が未定
 
-### 今後の方針（2027年度研究計画書に準拠）
+### 今後の方針（2027年度研究計画書 第6稿に準拠）
 - **KDアプローチは打ち切り**（v1・v2で2回失敗）
-- **修士論文の方向性**: SE→ASR vs ASRモデル適応の体系的比較研究
-  - TAPSベースラインSE（Demucs・SE-conformer・TSTNN）を公開コードで再現し、FT/Adapterと同一条件で公平比較
-  - 日本語喉マイク音声での追加言語間転移検証
-  - 上記を含む修士論文としてまとめ、併せて国際会議投稿を検討
-- **次にやるべき実験**: TAPSベースラインSEの再現（taps-baselines GitHubリポジトリ利用）
+- **TAPSベースラインSE比較実験は完了**（フェーズ4、results/taps_se_comparison.csv）
+- **修士論文の方向性**: SE vs ASRモデル適応の体系的比較・効果解析
+  - 比較実験は学部での予備実験として完了済み
+  - 修士課程では効果解析・設計原則の体系化・査読論文発表が主目標
+  - 「比較実験は済んでいるが、効果解析レポートの論文化は未完了」という防衛ロジックで計画書成立
+- **研究計画書防衛の核心**: テーマ「比較・効果解析」のうち「比較」は予備実験として完了、「効果解析」（なぜ効果差が生じるかの体系的説明・査読論文化）は未完了 → 修士課程の目標として成立
 
 ### 喉マイク→気導マイク変換の関連研究（2026年5月調査）
 - TAPS論文自身がベースライン変換実験を含む: Demucs(mapping) > TSTNN(masking) for CER
