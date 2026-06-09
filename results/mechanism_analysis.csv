@@ -1,0 +1,16 @@
+experiment,key,value
+B_spectrum,0–50Hz,+40.9844
+B_spectrum,50–300Hz,-1.9579
+B_spectrum,300Hz–1kHz,+3.0228
+B_spectrum,1–2kHz,+11.8834
+B_spectrum,2–4kHz,+10.9617
+B_spectrum,4–8kHz,+54.0804
+A_encoder,cos_pre_mean,0.9939
+A_encoder,cos_pre_std,0.0020
+A_encoder,cos_ft_mean,0.9892
+A_encoder,cos_ft_std,0.0026
+A_encoder,l2_pre_mean,2.9351
+A_encoder,l2_pre_std,0.5589
+A_encoder,l2_ft_mean,3.9792
+A_encoder,l2_ft_std,0.6011
+A_encoder,l2_reduction_pct,-35.5754
