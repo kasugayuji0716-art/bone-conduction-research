@@ -1,0 +1,21 @@
+condition,category,errors,total,error_rate
+Pretrained + No SE,摩擦音/破擦音 (ㅅ ㅆ ㅈ ㅊ ㅎ),2387,8704,0.2742
+Pretrained + No SE,閉鎖音 (ㄱ ㄷ ㅂ等),3091,9439,0.3275
+Pretrained + No SE,鼻音 (ㄴ ㅁ ㅇ),3388,14428,0.2348
+Pretrained + No SE,流音 (ㄹ),692,3826,0.1809
+Pretrained + No SE,母音 (ㅏ ㅓ ㅗ等),7044,24347,0.2893
+Pretrained + SE-Conformer,摩擦音/破擦音 (ㅅ ㅆ ㅈ ㅊ ㅎ),1320,8704,0.1517
+Pretrained + SE-Conformer,閉鎖音 (ㄱ ㄷ ㅂ等),1368,9439,0.1449
+Pretrained + SE-Conformer,鼻音 (ㄴ ㅁ ㅇ),1711,14428,0.1186
+Pretrained + SE-Conformer,流音 (ㄹ),444,3826,0.1160
+Pretrained + SE-Conformer,母音 (ㅏ ㅓ ㅗ等),3547,24347,0.1457
+FT + No SE,摩擦音/破擦音 (ㅅ ㅆ ㅈ ㅊ ㅎ),455,8704,0.0523
+FT + No SE,閉鎖音 (ㄱ ㄷ ㅂ等),537,9439,0.0569
+FT + No SE,鼻音 (ㄴ ㅁ ㅇ),675,14428,0.0468
+FT + No SE,流音 (ㄹ),170,3826,0.0444
+FT + No SE,母音 (ㅏ ㅓ ㅗ等),1564,24347,0.0642
+FT + SE-Conformer,摩擦音/破擦音 (ㅅ ㅆ ㅈ ㅊ ㅎ),630,8704,0.0724
+FT + SE-Conformer,閉鎖音 (ㄱ ㄷ ㅂ等),681,9439,0.0721
+FT + SE-Conformer,鼻音 (ㄴ ㅁ ㅇ),785,14428,0.0544
+FT + SE-Conformer,流音 (ㄹ),210,3826,0.0549
+FT + SE-Conformer,母音 (ㅏ ㅓ ㅗ等),1704,24347,0.0700

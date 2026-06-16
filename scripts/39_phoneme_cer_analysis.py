@@ -253,6 +253,21 @@ def main():
     if device.type == 'cuda': torch.cuda.empty_cache()
     print('SE適用完了')
 
+    # ── CTranslate2形式に変換（未変換の場合のみ）───────────────────
+    import subprocess
+    def ensure_ct2(src, dst):
+        if not Path(dst).exists():
+            print(f'  CTranslate2変換: {src} → {dst}')
+            subprocess.run(
+                ['ct2-transformers-converter', '--model', str(src),
+                 '--output_dir', dst, '--force'],
+                check=True
+            )
+    ensure_ct2('openai/whisper-small',
+                '/tmp/whisper_small_ct2')
+    ensure_ct2(str(CKPT_DIR / 'whisper_throat_finetuned'),
+                '/tmp/whisper_ft_ct2')
+
     # ── ASRモデルロード ───────────────────────────────────────────
     print('Pretrained Whisper ロード...')
     fw_pre = FasterWhisperModel('/tmp/whisper_small_ct2',  device=fw_device, compute_type=fw_ctype)
