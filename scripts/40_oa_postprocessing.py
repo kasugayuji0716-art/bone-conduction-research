@@ -54,50 +54,116 @@ OA_OMEGAS = [round(w * 0.1, 1) for w in range(11)]  # 0.0 ~ 1.0
 
 # ── SE-Conformer アーキテクチャ（script37より流用） ──────────────────
 
-class _ConformerBlock(nn.Module):
-    def __init__(self, d_model=256, n_heads=4, ff_mult=4, conv_kernel=31, dropout=0.1):
+class _SEConformerFFN(nn.Module):
+    def __init__(self, d=512, r=64):
         super().__init__()
-        self.ff1  = nn.Sequential(nn.LayerNorm(d_model), nn.Linear(d_model, d_model*ff_mult),
-                                   nn.SiLU(), nn.Dropout(dropout), nn.Linear(d_model*ff_mult, d_model), nn.Dropout(dropout))
-        self.attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout, batch_first=True)
-        self.ln_a = nn.LayerNorm(d_model)
-        self.conv = nn.Sequential(nn.LayerNorm(d_model),
-                                   nn.Conv1d(d_model, d_model*2, 1), nn.GLU(dim=1),
-                                   nn.Conv1d(d_model, d_model, conv_kernel, padding=conv_kernel//2, groups=d_model),
-                                   nn.BatchNorm1d(d_model), nn.SiLU(),
-                                   nn.Conv1d(d_model, d_model, 1), nn.Dropout(dropout))
-        self.ff2  = nn.Sequential(nn.LayerNorm(d_model), nn.Linear(d_model, d_model*ff_mult),
-                                   nn.SiLU(), nn.Dropout(dropout), nn.Linear(d_model*ff_mult, d_model), nn.Dropout(dropout))
-        self.ln   = nn.LayerNorm(d_model)
+        self.sequential = nn.Sequential(
+            nn.LayerNorm(d), nn.Linear(d, r), nn.SiLU(),
+            nn.Dropout(0.1), nn.Linear(r, d),
+        )
 
     def forward(self, x):
-        x = x + 0.5 * self.ff1(x)
-        r, _ = self.attn(*(self.ln_a(x),)*3)
-        x = x + r
-        c = x.transpose(1, 2)
-        c = self.conv[0](x)
-        c = self.conv[1](c.transpose(1, 2)).transpose(1, 2)
-        c = self.conv[2](c); c = self.conv[3](c); c = self.conv[4](c)
-        c = self.conv[5](c); c = self.conv[6](c)
-        x = x + c.transpose(1, 2)
-        x = x + 0.5 * self.ff2(x)
-        return self.ln(x)
+        return self.sequential(x)
 
 
-class SEConformer(nn.Module):
-    D = 256; K = 8; S = 4; N_CONF = 4
-    def __init__(self):
+class _SEConformerConvModule(nn.Module):
+    def __init__(self, d=512, k=15):
         super().__init__()
-        self.encoder = nn.Sequential(nn.Conv1d(1, self.D, self.K, stride=self.S), nn.PReLU())
-        self.conformers = nn.Sequential(*[_ConformerBlock(self.D) for _ in range(self.N_CONF)])
-        self.decoder = nn.Sequential(nn.ConvTranspose1d(self.D, 1, self.K, stride=self.S))
+        self.layer_norm = nn.LayerNorm(d)
+        self.sequential = nn.Sequential(
+            nn.Conv1d(d, d * 2, 1),
+            nn.GLU(dim=1),
+            nn.Conv1d(d, d, k, padding=k//2, groups=d),
+            nn.BatchNorm1d(d),
+            nn.SiLU(),
+            nn.Conv1d(d, d, 1),
+        )
 
-    def forward(self, x):
-        if x.dim() == 1: x = x.unsqueeze(0).unsqueeze(0)
+    def forward(self, x):           # x: (B, T, d)
+        r = x
+        x = self.layer_norm(x).transpose(1, 2)  # (B, d, T)
+        x = self.sequential(x).transpose(1, 2)  # (B, T, d)
+        return x + r
+
+
+class _SEConformerBlock(nn.Module):
+    def __init__(self, d=512, heads=8):
+        super().__init__()
+        self.ffn1                = _SEConformerFFN(d)
+        self.self_attn_layer_norm = nn.LayerNorm(d)
+        self.self_attn           = nn.MultiheadAttention(d, heads, batch_first=True)
+        self.conv_module         = _SEConformerConvModule(d)
+        self.ffn2                = _SEConformerFFN(d)
+        self.final_layer_norm    = nn.LayerNorm(d)
+
+    def forward(self, x):           # x: (B, T, d)
+        x = x + 0.5 * self.ffn1(x)
+        r = x
+        x = self.self_attn_layer_norm(x)
+        a, _ = self.self_attn(x, x, x)
+        x = r + a
+        x = x + self.conv_module(x)
+        x = x + 0.5 * self.ffn2(x)
+        return self.final_layer_norm(x)
+
+
+class SEConformerModel(nn.Module):
+    CH = [1, 64, 128, 256, 512]; K = 8; S = 4
+    RESAMPLE = 4; FLOOR = 1e-3
+
+    def __init__(self, heads=4, n_conf=4):
+        super().__init__()
+        enc, dec = nn.ModuleList(), nn.ModuleList()
+        for i in range(4):
+            ic, hc = self.CH[i], self.CH[i + 1]
+            enc.append(nn.Sequential(
+                nn.Conv1d(ic, hc, self.K, stride=self.S), nn.ReLU(),
+                nn.Conv1d(hc, hc * 2, 1), nn.GLU(dim=1),
+            ))
+        for i in range(3, -1, -1):
+            ic, oc = self.CH[i + 1], self.CH[i]
+            dec.append(nn.Sequential(
+                nn.Conv1d(ic, ic * 2, 1), nn.GLU(dim=1), nn.ReLU(),
+                nn.ConvTranspose1d(ic, max(oc, 1), self.K, stride=self.S),
+            ))
+        self.encoder    = enc
+        self.conformers = nn.ModuleList([_SEConformerBlock(self.CH[-1], heads) for _ in range(n_conf)])
+        self.decoder    = dec
+
+    def valid_length(self, length: int) -> int:
+        import math
+        length = math.ceil(length * self.RESAMPLE)
+        for _ in range(len(self.CH) - 1):
+            length = math.ceil((length - self.K) / self.S) + 1
+            length = max(length, 1)
+        for _ in range(len(self.CH) - 1):
+            length = (length - 1) * self.S + self.K
+        return int(math.ceil(length / self.RESAMPLE))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        from models.demucs import upsample2, downsample2
+        if x.dim() == 1: x = x.unsqueeze(0).unsqueeze(1)
         elif x.dim() == 2: x = x.unsqueeze(1)
-        skip = self.encoder(x)
-        h = self.conformers(skip.transpose(1, 2)).transpose(1, 2)
-        out = self.decoder(h + skip)
+        mono = x.mean(dim=1, keepdim=True)
+        std  = mono.std(dim=-1, keepdim=True)
+        x    = x / (self.FLOOR + std)
+        length = x.shape[-1]
+        x = F.pad(x, (0, self.valid_length(length) - length))
+        x = upsample2(upsample2(x))
+        skips = []
+        for enc in self.encoder:
+            x = enc(x); skips.append(x)
+        x = x.permute(0, 2, 1)
+        for conf in self.conformers:
+            x = conf(x)
+        x = x.permute(0, 2, 1)
+        for dec in self.decoder:
+            skip = skips.pop(-1)
+            x = x + skip[..., :x.shape[-1]]
+            x = dec(x)
+        x = downsample2(downsample2(x))
+        x = x[..., :length]
+        out = std * x
         return out.squeeze(1).squeeze(0)
 
 
@@ -109,7 +175,7 @@ class _DemucsLSTM(nn.Module):
         self.lstm   = nn.LSTM(hidden, hidden, num_layers=2, batch_first=True, bidirectional=True)
         self.linear = nn.Linear(hidden * 2, hidden)
 
-    def forward(self, x):
+    def forward(self, x):           # x: (B, C, T)
         x = x.permute(0, 2, 1)
         y, _ = self.lstm(x)
         return self.linear(y).permute(0, 2, 1)
@@ -117,35 +183,44 @@ class _DemucsLSTM(nn.Module):
 
 class ConvDemucs(nn.Module):
     CH = [1, 64, 128, 256, 512, 1024]; K = 8; S = 4
+
     def __init__(self):
         super().__init__()
         enc, dec = nn.ModuleList(), nn.ModuleList()
         for i in range(5):
-            ic, hc = self.CH[i], self.CH[i+1]
-            enc.append(nn.Sequential(nn.Conv1d(ic, hc, self.K, stride=self.S), nn.ReLU(),
-                                      nn.Conv1d(hc, hc*2, 1), nn.GLU(dim=1)))
-            dec.append(nn.Sequential(nn.Conv1d(self.CH[i+1], self.CH[i+1]*2, 1), nn.GLU(dim=1),
-                                      nn.ConvTranspose1d(self.CH[i+1], self.CH[i], self.K, stride=self.S)))
+            ic, hc = self.CH[i], self.CH[i + 1]
+            enc.append(nn.Sequential(
+                nn.Conv1d(ic, hc, self.K, stride=self.S), nn.ReLU(),
+                nn.Conv1d(hc, hc * 2, 1), nn.GLU(dim=1),
+            ))
+        for i in range(4, -1, -1):
+            ic, oc = self.CH[i + 1], self.CH[i]
+            dec.append(nn.Sequential(
+                nn.Conv1d(ic, ic * 2, 1), nn.GLU(dim=1),
+                nn.ConvTranspose1d(ic, max(oc, 1), self.K, stride=self.S),
+                nn.ReLU() if i > 0 else nn.Tanh(),
+            ))
         self.encoder = enc
         self.lstm    = _DemucsLSTM(self.CH[-1])
         self.decoder = dec
 
-    def forward(self, x):
+    def forward(self, x):           # x: (B, 1, T)
         if x.dim() == 1: x = x.unsqueeze(0).unsqueeze(0)
         elif x.dim() == 2: x = x.unsqueeze(1)
-        skips = []
+        T = x.shape[-1]
+        h = x
         for enc in self.encoder:
-            x = enc(x); skips.append(x)
-        x = self.lstm(x)
-        for dec, s in zip(reversed(self.decoder), reversed(skips)):
-            x = dec(x + s[:, :, :x.shape[2]])
-        return x.squeeze(1).squeeze(0)
+            h = enc(h)
+        h = self.lstm(h)
+        for dec in self.decoder:
+            h = dec(h)
+        return h[..., :T].squeeze(1).squeeze(0)
 
 
 # ── SE モデルのロード ─────────────────────────────────────────────────
 
 def load_se_model(name: str):
-    name_map = {'seconformer': ('seconformer.th', SEConformer),
+    name_map = {'seconformer': ('seconformer.th', SEConformerModel),
                 'demucs':      ('demucs.th',      ConvDemucs)}
     fname, cls = name_map[name]
     ckpt_path = PRETRAINED_DIR / fname
