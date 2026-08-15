@@ -47,7 +47,8 @@ if str(_TAPS_BASELINES) not in sys.path:
     sys.path.insert(0, str(_TAPS_BASELINES))
 
 TARGET_SR = 16000
-DEVICE    = 'cuda' if torch.cuda.is_available() else 'cpu'
+DEVICE     = 'cuda' if torch.cuda.is_available() else 'cpu'
+SE_DEVICE  = 'cpu'   # SE-ConformerはAttentionのメモリが巨大になるためCPUで実行
 OA_OMEGAS = [round(w * 0.1, 1) for w in range(11)]  # 0.0 ~ 1.0
 
 
@@ -156,8 +157,8 @@ def load_se_model(name: str):
     if isinstance(state, dict) and 'model' in state:
         state = state['model']
     model.load_state_dict(state, strict=False)
-    model.eval().to(DEVICE)
-    print(f"Loaded SE model: {fname}")
+    model.eval().to(SE_DEVICE)
+    print(f"Loaded SE model: {fname} (device: {SE_DEVICE})")
     return model
 
 
@@ -230,7 +231,7 @@ def main():
 
         # SE 適用
         with torch.no_grad():
-            inp = torch.from_numpy(wav).to(DEVICE)
+            inp = torch.from_numpy(wav).to(SE_DEVICE)
             se_out = se_model(inp).cpu().numpy()
 
         ref_text = s['text']
