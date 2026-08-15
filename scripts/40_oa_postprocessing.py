@@ -164,9 +164,12 @@ def load_se_model(name: str):
 # ── ASR（faster-whisper） ─────────────────────────────────────────────
 
 def load_asr():
-    fw = FasterWhisperModel('openai/whisper-small', device=DEVICE,
+    # CTranslate2変換済みモデルを優先して使用
+    ct2_path = Path('/tmp/whisper-small-ct2')
+    model_id  = str(ct2_path) if ct2_path.exists() else 'openai/whisper-small'
+    fw = FasterWhisperModel(model_id, device=DEVICE,
                              compute_type='float16' if DEVICE == 'cuda' else 'int8')
-    print("Loaded ASR: faster-whisper small")
+    print(f"Loaded ASR: faster-whisper small ({model_id})")
     return fw
 
 
