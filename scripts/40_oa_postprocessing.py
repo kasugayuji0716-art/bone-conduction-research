@@ -271,6 +271,8 @@ def main():
                         help='SEモデル名 (default: seconformer)')
     parser.add_argument('--n_utts', type=int, default=None,
                         help='評価発話数（Noneで全件）。高速確認には100を指定')
+    parser.add_argument('--balanced', action='store_true',
+                        help='話者ごとに均等サンプリング（--n_uttsを話者数で割った数ずつ）')
     args = parser.parse_args()
 
     print(f"\n=== OA後処理検証 | SEモデル: {args.se_model} | デバイス: {DEVICE} ===\n")
@@ -288,7 +290,15 @@ def main():
             if wav_path.exists():
                 samples.append({'path': wav_path, 'text': row['text']})
 
-    if args.n_utts:
+    if args.balanced and args.n_utts:
+        from collections import defaultdict
+        by_speaker = defaultdict(list)
+        for s in samples:
+            spk = s['path'].stem.split('_')[0]
+            by_speaker[spk].append(s)
+        n_per_spk = max(1, args.n_utts // len(by_speaker))
+        samples = [s for spk_samples in by_speaker.values() for s in spk_samples[:n_per_spk]]
+    elif args.n_utts:
         samples = samples[:args.n_utts]
     print(f"評価発話数: {len(samples)}")
 
