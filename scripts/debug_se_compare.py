@@ -14,7 +14,11 @@ spec2 = importlib.util.spec_from_file_location('s40', 'scripts/40_oa_postprocess
 s40 = importlib.util.module_from_spec(spec2)
 spec2.loader.exec_module(s40)
 
-wav, _ = sf.read('data/raw/taps/throat/test/p00_s001.wav', dtype='float32')
+from pathlib import Path
+test_dir = Path('data/raw/taps/throat/test')
+wav_path = sorted(test_dir.glob('*.wav'))[0]
+print(f'使用ファイル: {wav_path}')
+wav, _ = sf.read(wav_path, dtype='float32')
 inp = torch.from_numpy(wav)
 
 PRETRAINED = 'taps-baselines/pretrained/seconformer.th'
