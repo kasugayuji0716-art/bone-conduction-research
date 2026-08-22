@@ -1,5 +1,5 @@
 condition,label,cer_mean,n_utts
-A_no_se,No SE（生喉マイク）,0.4707194728606503,100
-B_taps_pretrained,TAPS pretrained SE,0.5621033995382804,100
+A_no_se,No SE（生喉マイク）,0.4670815749963043,100
+B_taps_pretrained,TAPS pretrained SE,0.5597129226902642,100
 C_si_sdr_only,SI-SDRのみ再学習 (λ=0.0),0.26667228228092343,100
-D_asr_aware,ASR-aware (λ=0.1),0.25601894226950067,100
+D_asr_aware,ASR-aware (λ=0.1),0.2504444467463247,100
