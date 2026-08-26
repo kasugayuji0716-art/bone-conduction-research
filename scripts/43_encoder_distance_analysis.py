@@ -191,7 +191,8 @@ def transcribe(asr, wav):
 
 def get_encoder_features(wav_np, feat_extractor, whisper_enc, device):
     """音声波形 → Whisper encoder特徴量（mean pooling）"""
-    inputs = feat_extractor(wav_np, sampling_rate=16000, return_tensors='pt', padding=True)
+    inputs = feat_extractor(wav_np, sampling_rate=16000, return_tensors='pt',
+                            padding='max_length', max_length=480000)  # 30秒にパディング
     input_features = inputs.input_features.to(device)
     with torch.no_grad():
         outputs = whisper_enc(input_features)
