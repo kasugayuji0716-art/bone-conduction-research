@@ -263,6 +263,10 @@ def main():
                              '  0.0: SI-SDRのみ（TAPSベースライン相当）\n'
                              '  0.1: 弱いASR制約\n'
                              '  1.0: 強いASR制約')
+    parser.add_argument('--feat_loss', type=str, default='l1',
+                        choices=['cosine', 'l1'],
+                        help='特徴量損失の種類: cosine（mean-pool後のcosine距離）'
+                             'or l1（フレームごとのL1距離、Perceive&Predict準拠）')
     parser.add_argument('--epochs',     type=int,   default=10)
     parser.add_argument('--batch_size', type=int,   default=4)
     parser.add_argument('--lr',         type=float, default=1e-4)
@@ -334,9 +338,13 @@ def main():
                 mel_se  = log_mel_fn(se_t)                                       # (B, 80, 3000)
                 mel_air = log_mel_fn(a_t)                                        # (B, 80, 3000)
                 with torch.no_grad():
-                    feat_air = whisper_enc(mel_air).last_hidden_state.mean(dim=1)  # (B, D)
-                feat_se  = whisper_enc(mel_se).last_hidden_state.mean(dim=1)       # (B, D)
-                l_feat   = 1 - F.cosine_similarity(feat_se, feat_air, dim=-1).mean()
+                    feat_air = whisper_enc(mel_air).last_hidden_state              # (B, T', D)
+                feat_se  = whisper_enc(mel_se).last_hidden_state                   # (B, T', D)
+                if args.feat_loss == 'l1':
+                    l_feat = F.l1_loss(feat_se, feat_air)
+                else:  # cosine
+                    l_feat = 1 - F.cosine_similarity(
+                        feat_se.mean(dim=1), feat_air.mean(dim=1), dim=-1).mean()
             else:
                 l_feat = torch.zeros(1, device=DEVICE)
 
@@ -364,9 +372,13 @@ def main():
                 if args.lambda_asr > 0:
                     mel_se  = log_mel_fn(se_t)
                     mel_air = log_mel_fn(a_t)
-                    feat_air = whisper_enc(mel_air).last_hidden_state.mean(dim=1)
-                    feat_se  = whisper_enc(mel_se).last_hidden_state.mean(dim=1)
-                    l_feat   = 1 - F.cosine_similarity(feat_se, feat_air, dim=-1).mean()
+                    feat_air = whisper_enc(mel_air).last_hidden_state
+                    feat_se  = whisper_enc(mel_se).last_hidden_state
+                    if args.feat_loss == 'l1':
+                        l_feat = F.l1_loss(feat_se, feat_air)
+                    else:
+                        l_feat = 1 - F.cosine_similarity(
+                            feat_se.mean(dim=1), feat_air.mean(dim=1), dim=-1).mean()
                 else:
                     l_feat = torch.zeros(1, device=DEVICE)
                 val_losses.append((l_recon + args.lambda_asr * l_feat).item())
