@@ -71,14 +71,24 @@ try:
     if result.unexpected_keys:
         print(f'  unexpected: {result.unexpected_keys[:5]}')
 
-    # デフォルトで失敗したら、hidden=64で試行
+    # デフォルトで失敗したら、チェックポイントから推定した設定で試行
     if result.missing_keys or result.unexpected_keys:
-        print('\n  hidden=64, conformer_dim=512で再試行...')
-        model_official = TAPSSeconformer(hidden=64, conformer_dim=512,
-                                          conformer_ffn_dim=512,
-                                          conformer_depth=4)
-        result = model_official.load_state_dict(state, strict=False)
-        print(f'  結果: missing={len(result.missing_keys)}, unexpected={len(result.unexpected_keys)}')
+        configs = [
+            dict(hidden=64, conformer_dim=512, conformer_ffn_dim=64,
+                 conformer_depth=4, depthwise_conv_kernel_size=15),
+            dict(hidden=64, conformer_dim=512, conformer_ffn_dim=512,
+                 conformer_depth=4, depthwise_conv_kernel_size=15),
+        ]
+        for cfg in configs:
+            print(f'\n  再試行: {cfg}')
+            try:
+                model_official = TAPSSeconformer(**cfg)
+                result = model_official.load_state_dict(state, strict=False)
+                print(f'  結果: missing={len(result.missing_keys)}, unexpected={len(result.unexpected_keys)}')
+                if not result.missing_keys and not result.unexpected_keys:
+                    break
+            except Exception as e2:
+                print(f'  失敗: {e2}')
 
     # 推論
     if not result.missing_keys and not result.unexpected_keys:
