@@ -15,6 +15,8 @@ model = seconformer(hidden=64, conformer_dim=512, conformer_ffn_dim=64,
                     conformer_depth=4, depthwise_conv_kernel_size=15)
 st = torch.load('taps-baselines/pretrained/seconformer.th',
                 map_location='cpu', weights_only=False)
+if isinstance(st, dict) and 'model' in st:
+    st = st['model']
 model.load_state_dict(st)
 model.eval()
 print('TAPS SE-Conformer (official) loaded')
