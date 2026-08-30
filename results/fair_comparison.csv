@@ -1,0 +1,6 @@
+condition,label,cer_mean,n_utts
+no_se,No SE,0.4719719251816354,1000
+taps_seconf,TAPS SE-Conformer,0.5810031295091955,1000
+taps_demucs,TAPS Demucs,0.9990096514191521,1000
+si_sdr_only,SI-SDR only (λ=0),0.2830790859088363,1000
+asr_aware,"ASR-aware (L1, λ=1.0)",0.2389077934962682,1000
