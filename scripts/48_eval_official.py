@@ -47,10 +47,10 @@ def load_se_official(ckpt_path):
 
 def main():
     conditions = [
-        ('no_se',               'No SE',                    None),
-        ('taps_pretrained',     'TAPS pretrained (official)', PRETRAINED_DIR / 'seconformer.th'),
-        ('si_sdr_official',     'SI-SDR only (official)',    CKPT_DIR / 'si_sdr_official' / 'best.th'),
-        ('asr_aware_official',  'ASR-aware (official)',      CKPT_DIR / 'asr_aware_official' / 'best.th'),
+        ('no_se',               'No SE',                        None),
+        ('taps_pretrained',     'TAPS pretrained',              PRETRAINED_DIR / 'seconformer.th'),
+        ('finetune_baseline',   'L1+STFT finetune (no ASR)',    CKPT_DIR / 'finetune_baseline' / 'best.th'),
+        ('finetune_asr_aware',  'L1+STFT+ASR finetune',        CKPT_DIR / 'finetune_asr_aware' / 'best.th'),
     ]
     conditions = [(k, l, p) for k, l, p in conditions if p is None or Path(p).exists()]
     print(f'Conditions: {[l for _, l, _ in conditions]}')

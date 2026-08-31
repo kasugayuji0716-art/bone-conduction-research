@@ -1,14 +1,14 @@
 """
 スクリプト47: TAPS公式SE-Conformerを使ったASR-aware再学習
-script 41と同じ損失だが、SEモデルにTAPS公式実装（torchaudio.ConformerLayer）を使用。
-公式実装との公平な比較を可能にする。
+TAPS論文と同じ損失（L1 waveform + Multi-resolution STFT）+ ASR特徴量損失。
+SEモデルにTAPS公式実装（torchaudio.ConformerLayer）を使用。
 
 使い方（DNN PC）:
-    # SI-SDRのみ（公式forwardベースライン）
-    python scripts/47_train_se_official.py --lambda_asr 0.0 --tag si_sdr_official
+    # L1+STFTのみ（TAPS論文と同じ損失で追加学習）
+    python scripts/47_train_se_official.py --lambda_asr 0.0 --tag finetune_baseline
 
-    # ASR-aware（公式forward）
-    python scripts/47_train_se_official.py --lambda_asr 1.0 --tag asr_aware_official
+    # L1+STFT + ASR-aware
+    python scripts/47_train_se_official.py --lambda_asr 1.0 --tag finetune_asr_aware
 
     # 評価
     python scripts/48_eval_official.py
@@ -75,18 +75,36 @@ class WhisperLogMel(nn.Module):
 
 
 # ══════════════════════════════════════════════════════════════
-# 損失関数
+# 損失関数（TAPS論文準拠: L1 waveform + Multi-resolution STFT）
 # ══════════════════════════════════════════════════════════════
 
-def si_sdr_loss(est, target):
-    est    = est    - est.mean(dim=-1, keepdim=True)
-    target = target - target.mean(dim=-1, keepdim=True)
-    dot    = (est * target).sum(dim=-1, keepdim=True)
-    norm2  = (target ** 2).sum(dim=-1, keepdim=True) + 1e-8
-    proj   = (dot / norm2) * target
-    noise  = est - proj
-    sdr    = 10 * torch.log10((proj ** 2).sum(dim=-1) / ((noise ** 2).sum(dim=-1) + 1e-8) + 1e-8)
-    return -sdr.mean()
+def l1_waveform_loss(est, target):
+    """L1 waveform loss: (1/T) * ||target - est||_1"""
+    return F.l1_loss(est, target)
+
+
+class MultiResolutionSTFTLoss(nn.Module):
+    """Multi-resolution STFT loss (TAPS論文で使用)"""
+    def __init__(self, resolutions=((512, 128, 512), (1024, 256, 1024), (2048, 512, 2048))):
+        super().__init__()
+        self.resolutions = resolutions  # (n_fft, hop_length, win_length)
+
+    def _stft_loss(self, est, target, n_fft, hop_length, win_length):
+        window = torch.hann_window(win_length, device=est.device)
+        est_stft = torch.stft(est, n_fft, hop_length, win_length, window, return_complex=True)
+        tgt_stft = torch.stft(target, n_fft, hop_length, win_length, window, return_complex=True)
+        est_mag = est_stft.abs()
+        tgt_mag = tgt_stft.abs()
+        # Spectral convergence + Log-magnitude L1
+        sc = torch.norm(tgt_mag - est_mag, p='fro') / (torch.norm(tgt_mag, p='fro') + 1e-8)
+        mag = F.l1_loss(torch.log(est_mag + 1e-8), torch.log(tgt_mag + 1e-8))
+        return sc + mag
+
+    def forward(self, est, target):
+        loss = 0
+        for n_fft, hop, win in self.resolutions:
+            loss += self._stft_loss(est, target, n_fft, hop, win)
+        return loss / len(self.resolutions)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -135,11 +153,14 @@ def collate_fn(batch):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--lambda_asr', type=float, default=1.0)
-    parser.add_argument('--epochs',     type=int,   default=10)
-    parser.add_argument('--batch_size', type=int,   default=4)
-    parser.add_argument('--lr',         type=float, default=1e-4)
-    parser.add_argument('--patience',   type=int,   default=3)
-    parser.add_argument('--tag',        type=str,   default='asr_aware_official',
+    parser.add_argument('--epochs',     type=int,   default=50,
+                        help='TAPS論文は200epoch。追加学習なので50で十分な可能性')
+    parser.add_argument('--batch_size', type=int,   default=16,
+                        help='TAPS論文と同じ')
+    parser.add_argument('--lr',         type=float, default=3e-4,
+                        help='TAPS論文と同じ')
+    parser.add_argument('--patience',   type=int,   default=5)
+    parser.add_argument('--tag',        type=str,   default='finetune_asr_aware',
                         help='チェックポイント保存ディレクトリ名')
     args = parser.parse_args()
 
@@ -158,6 +179,9 @@ def main():
     se_model.load_state_dict(state)
     n_params = sum(p.numel() for p in se_model.parameters() if p.requires_grad)
     print(f'SE-Conformer (official): pretrained loaded ({n_params/1e6:.1f}M params)')
+
+    # ── STFT損失 ──
+    stft_loss_fn = MultiResolutionSTFTLoss().to(DEVICE)
 
     # ── Whisper encoder（凍結）──
     whisper = WhisperModel.from_pretrained('openai/whisper-small')
@@ -178,7 +202,7 @@ def main():
     dev_dl   = DataLoader(dev_ds,   batch_size=args.batch_size, shuffle=False,
                           collate_fn=collate_fn, num_workers=4, pin_memory=True)
 
-    optimizer = torch.optim.Adam(se_model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(se_model.parameters(), lr=args.lr, betas=(0.9, 0.99))
 
     log_path = ckpt_dir / 'training_log.csv'
     with open(log_path, 'w', newline='') as f:
@@ -204,7 +228,9 @@ def main():
             se_t = se_out[..., :min_len]
             a_t  = a_wav[..., :min_len]
 
-            l_recon = si_sdr_loss(se_t, a_t)
+            l_l1   = l1_waveform_loss(se_t, a_t)
+            l_stft = stft_loss_fn(se_t, a_t)
+            l_recon = l_l1 + l_stft
 
             if args.lambda_asr > 0:
                 mel_se  = log_mel_fn(se_t)
@@ -236,7 +262,9 @@ def main():
                 min_len = min(se_out.shape[-1], a_wav.shape[-1])
                 se_t = se_out[..., :min_len]
                 a_t  = a_wav[..., :min_len]
-                l_recon = si_sdr_loss(se_t, a_t)
+                l_l1   = l1_waveform_loss(se_t, a_t)
+                l_stft = stft_loss_fn(se_t, a_t)
+                l_recon = l_l1 + l_stft
                 if args.lambda_asr > 0:
                     mel_se  = log_mel_fn(se_t)
                     mel_air = log_mel_fn(a_t)
