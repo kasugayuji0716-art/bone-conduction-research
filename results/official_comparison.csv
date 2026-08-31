@@ -1,0 +1,5 @@
+condition,label,cer_mean,n_utts
+no_se,No SE,0.470927604681694,1000
+taps_pretrained,TAPS pretrained (official),0.2518523318374115,1000
+si_sdr_official,SI-SDR only (official),0.261191771333289,1000
+asr_aware_official,ASR-aware (official),0.2471422324829844,1000
