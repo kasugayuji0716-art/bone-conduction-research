@@ -29,7 +29,7 @@ TAPS_SE_CONFIG = dict(
     conformer_depth=4, depthwise_conv_kernel_size=15,
 )
 
-LAMBDAS = [0.0, 0.1, 0.5, 1.0, 2.0, 5.0]
+LAMBDAS = [0.0, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0]
 
 
 def load_se(ckpt_path):
