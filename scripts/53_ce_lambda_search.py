@@ -53,7 +53,7 @@ def main():
         cmd = [sys.executable, str(train_script),
                '--lambda_asr', str(lam),
                '--tag', tag,
-               '--batch_size', '4']
+               '--batch_size', '2']
         subprocess.run(cmd, check=True)
 
     # Step 2: Evaluate all

@@ -12,6 +12,7 @@ encoder距離（L1）の代わりにWhisper decoder出力のCE損失を使用。
 
 import argparse
 import csv
+import os
 import sys
 from pathlib import Path
 
@@ -182,10 +183,11 @@ def main():
     from functools import partial
     collate = partial(collate_fn, tokenizer=tokenizer)
 
+    n_workers = min(2, os.cpu_count() or 0)
     train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                          collate_fn=collate, num_workers=4, pin_memory=True)
+                          collate_fn=collate, num_workers=n_workers, pin_memory=True)
     dev_dl   = DataLoader(dev_ds,   batch_size=args.batch_size, shuffle=False,
-                          collate_fn=collate, num_workers=4, pin_memory=True)
+                          collate_fn=collate, num_workers=n_workers, pin_memory=True)
 
     optimizer = torch.optim.Adam(se_model.parameters(), lr=args.lr, betas=(0.9, 0.99))
 
