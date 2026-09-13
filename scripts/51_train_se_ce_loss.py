@@ -209,17 +209,19 @@ def main():
             a_wav = a_wav.to(DEVICE)
             label_ids = label_ids.to(DEVICE)
 
-            with torch.amp.autocast('cuda'):
-                se_out = se_model(t_wav).squeeze(1)
-                min_len = min(se_out.shape[-1], a_wav.shape[-1])
-                se_t = se_out[..., :min_len]
-                a_t  = a_wav[..., :min_len]
+            # SE + recon loss in fp32 (STFT needs fp32)
+            se_out = se_model(t_wav).squeeze(1)
+            min_len = min(se_out.shape[-1], a_wav.shape[-1])
+            se_t = se_out[..., :min_len]
+            a_t  = a_wav[..., :min_len]
 
-                l_l1   = F.l1_loss(se_t, a_t)
-                l_stft = stft_loss_fn(se_t, a_t)
-                l_recon = l_l1 + l_stft
+            l_l1   = F.l1_loss(se_t, a_t)
+            l_stft = stft_loss_fn(se_t, a_t)
+            l_recon = l_l1 + l_stft
 
-                if args.lambda_asr > 0:
+            if args.lambda_asr > 0:
+                # Whisper forward in fp16 (main speedup)
+                with torch.amp.autocast('cuda'):
                     mel_se = log_mel_fn(se_t)
                     encoder_out = whisper.model.encoder(mel_se)
                     decoder_out = whisper(
@@ -227,10 +229,10 @@ def main():
                         labels=label_ids,
                     )
                     l_ce = decoder_out.loss
-                else:
-                    l_ce = torch.zeros(1, device=DEVICE)
+            else:
+                l_ce = torch.zeros(1, device=DEVICE)
 
-                loss = l_recon + args.lambda_asr * l_ce
+            loss = l_recon + args.lambda_asr * l_ce
 
             optimizer.zero_grad()
             scaler.scale(loss).backward()
@@ -244,7 +246,7 @@ def main():
         se_model.eval()
         val_losses, val_recons, val_ces = [], [], []
 
-        with torch.no_grad(), torch.amp.autocast('cuda'):
+        with torch.no_grad():
             for t_wav, a_wav, label_ids in dev_dl:
                 t_wav = t_wav.to(DEVICE)
                 a_wav = a_wav.to(DEVICE)
@@ -260,13 +262,14 @@ def main():
                 l_recon = l_l1 + l_stft
 
                 if args.lambda_asr > 0:
-                    mel_se = log_mel_fn(se_t)
-                    encoder_out = whisper.model.encoder(mel_se)
-                    decoder_out = whisper(
-                        encoder_outputs=(encoder_out,),
-                        labels=label_ids,
-                    )
-                    l_ce = decoder_out.loss
+                    with torch.amp.autocast('cuda'):
+                        mel_se = log_mel_fn(se_t)
+                        encoder_out = whisper.model.encoder(mel_se)
+                        decoder_out = whisper(
+                            encoder_outputs=(encoder_out,),
+                            labels=label_ids,
+                        )
+                        l_ce = decoder_out.loss
                 else:
                     l_ce = torch.zeros(1, device=DEVICE)
 
