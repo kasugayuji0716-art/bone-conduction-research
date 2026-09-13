@@ -190,6 +190,7 @@ def main():
                           collate_fn=collate, num_workers=n_workers, pin_memory=True)
 
     optimizer = torch.optim.Adam(se_model.parameters(), lr=args.lr, betas=(0.9, 0.99))
+    scaler = torch.amp.GradScaler('cuda')
 
     log_path = ckpt_dir / 'training_log.csv'
     with open(log_path, 'w', newline='') as f:
@@ -208,41 +209,42 @@ def main():
             a_wav = a_wav.to(DEVICE)
             label_ids = label_ids.to(DEVICE)
 
-            se_out = se_model(t_wav).squeeze(1)
-            min_len = min(se_out.shape[-1], a_wav.shape[-1])
-            se_t = se_out[..., :min_len]
-            a_t  = a_wav[..., :min_len]
+            with torch.amp.autocast('cuda'):
+                se_out = se_model(t_wav).squeeze(1)
+                min_len = min(se_out.shape[-1], a_wav.shape[-1])
+                se_t = se_out[..., :min_len]
+                a_t  = a_wav[..., :min_len]
 
-            l_l1   = F.l1_loss(se_t, a_t)
-            l_stft = stft_loss_fn(se_t, a_t)
-            l_recon = l_l1 + l_stft
+                l_l1   = F.l1_loss(se_t, a_t)
+                l_stft = stft_loss_fn(se_t, a_t)
+                l_recon = l_l1 + l_stft
 
-            if args.lambda_asr > 0:
-                mel_se = log_mel_fn(se_t)
-                # Encoder with grad (so SE gets gradients through mel)
-                encoder_out = whisper.model.encoder(mel_se)
-                # Decoder forward with labels -> CE loss
-                decoder_out = whisper(
-                    encoder_outputs=(encoder_out,),
-                    labels=label_ids,
-                )
-                l_ce = decoder_out.loss
-            else:
-                l_ce = torch.zeros(1, device=DEVICE)
+                if args.lambda_asr > 0:
+                    mel_se = log_mel_fn(se_t)
+                    encoder_out = whisper.model.encoder(mel_se)
+                    decoder_out = whisper(
+                        encoder_outputs=(encoder_out,),
+                        labels=label_ids,
+                    )
+                    l_ce = decoder_out.loss
+                else:
+                    l_ce = torch.zeros(1, device=DEVICE)
 
-            loss = l_recon + args.lambda_asr * l_ce
+                loss = l_recon + args.lambda_asr * l_ce
 
             optimizer.zero_grad()
-            loss.backward()
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(se_model.parameters(), 5.0)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             train_losses.append(loss.item())
 
         # Val
         se_model.eval()
         val_losses, val_recons, val_ces = [], [], []
 
-        with torch.no_grad():
+        with torch.no_grad(), torch.amp.autocast('cuda'):
             for t_wav, a_wav, label_ids in dev_dl:
                 t_wav = t_wav.to(DEVICE)
                 a_wav = a_wav.to(DEVICE)
