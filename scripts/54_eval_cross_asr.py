@@ -32,10 +32,14 @@ SE_CONDITIONS = [
     ('ce_best',         'CE (λ=2.0)',           BASE_DIR / 'checkpoints' / 'ce_lambda_2.0' / 'best.th'),
 ]
 
+def _asr_path(name):
+    ct2 = Path(f'/tmp/{name}-ct2')
+    return str(ct2) if ct2.exists() else f'openai/{name}'
+
 ASR_MODELS = [
-    ('whisper-small',  'openai/whisper-small'),
-    ('whisper-base',   'openai/whisper-base'),
-    ('whisper-medium', 'openai/whisper-medium'),
+    ('whisper-base',   lambda: _asr_path('whisper-base')),
+    ('whisper-small',  lambda: _asr_path('whisper-small')),
+    ('whisper-medium', lambda: _asr_path('whisper-medium')),
 ]
 
 
@@ -53,6 +57,7 @@ def main():
     conditions = [(k, l, p) for k, l, p in SE_CONDITIONS if p is None or p.exists()]
     print(f'SE conditions: {[l for _, l, _ in conditions]}')
     print(f'ASR models: {[name for name, _ in ASR_MODELS]}')
+    print(f'ASR paths: {[fn() for _, fn in ASR_MODELS]}')
 
     # Load test data
     samples = []
@@ -92,8 +97,9 @@ def main():
     # Evaluate with each ASR model
     all_results = []
 
-    for asr_name, asr_id in ASR_MODELS:
-        print(f'\n=== ASR: {asr_name} ===')
+    for asr_name, asr_fn in ASR_MODELS:
+        asr_id = asr_fn()
+        print(f'\n=== ASR: {asr_name} ({asr_id}) ===')
         asr = FasterWhisperModel(asr_id, device=DEVICE,
                                  compute_type='float16' if DEVICE == 'cuda' else 'int8')
 
