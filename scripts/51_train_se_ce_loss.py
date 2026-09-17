@@ -138,6 +138,8 @@ def main():
     parser.add_argument('--lr',         type=float, default=3e-4)
     parser.add_argument('--patience',   type=int,   default=5)
     parser.add_argument('--tag',        type=str,   default='ce_lambda_5.0')
+    parser.add_argument('--no_recon',   action='store_true',
+                        help='CE loss only (no L1+STFT reconstruction loss)')
     args = parser.parse_args()
 
     ckpt_dir = BASE_DIR / 'checkpoints' / args.tag
@@ -215,9 +217,12 @@ def main():
             se_t = se_out[..., :min_len]
             a_t  = a_wav[..., :min_len]
 
-            l_l1   = F.l1_loss(se_t, a_t)
-            l_stft = stft_loss_fn(se_t, a_t)
-            l_recon = l_l1 + l_stft
+            if not args.no_recon:
+                l_l1   = F.l1_loss(se_t, a_t)
+                l_stft = stft_loss_fn(se_t, a_t)
+                l_recon = l_l1 + l_stft
+            else:
+                l_recon = torch.zeros(1, device=DEVICE)
 
             if args.lambda_asr > 0:
                 # Whisper forward in fp16 (main speedup)
@@ -257,9 +262,12 @@ def main():
                 se_t = se_out[..., :min_len]
                 a_t  = a_wav[..., :min_len]
 
-                l_l1   = F.l1_loss(se_t, a_t)
-                l_stft = stft_loss_fn(se_t, a_t)
-                l_recon = l_l1 + l_stft
+                if not args.no_recon:
+                    l_l1   = F.l1_loss(se_t, a_t)
+                    l_stft = stft_loss_fn(se_t, a_t)
+                    l_recon = l_l1 + l_stft
+                else:
+                    l_recon = torch.zeros(1, device=DEVICE)
 
                 if args.lambda_asr > 0:
                     with torch.amp.autocast('cuda'):
