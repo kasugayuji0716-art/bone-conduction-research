@@ -1,13 +1,14 @@
 """
-スクリプト51: Cross-entropy損失によるASR-aware SE学習
-encoder距離（L1）の代わりにWhisper decoder出力のCE損失を使用。
-より直接的なASR最適化。
+スクリプト51: Cross-entropy損失によるASR-aware SE学習（v2: レビュー修正版）
 
-損失 = L1+STFT（波形品質） + λ × CE(Whisper(SE出力), テキスト)
+修正点（2026-09-20）:
+  1. WhisperLogMel → Whisper標準前処理に一致（Slaney mel, 波形パディング）
+  2. CE教師ラベル: EOS保持、BOS除去（HF公式に準拠）
+  3. 15秒超の発話を除外（音声切り出しとテキスト不一致の回避）
+  4. STFT損失パラメータをTAPS公式設定に合わせる
 
 使い方（DNN PC）:
-    python scripts/51_train_se_ce_loss.py --lambda_asr 5.0 --tag ce_lambda_5.0
-    python scripts/51_train_se_ce_loss.py --lambda_asr 1.0 --tag ce_lambda_1.0
+    python scripts/51_train_se_ce_loss.py --lambda_asr 2.0 --tag ce_v2_lambda_2.0
 """
 
 import argparse
@@ -42,8 +43,14 @@ TAPS_SE_CONFIG = dict(
 )
 
 
+# ══════════════════════════════════════════════════════════════
+# Fix 1: Whisper-compatible log-mel (Slaney scale, waveform padding)
+# ══════════════════════════════════════════════════════════════
+
 class WhisperLogMel(nn.Module):
-    N_FRAMES = 3000
+    """Differentiable log-mel matching Whisper's WhisperFeatureExtractor."""
+    N_SAMPLES = 480000  # 30 seconds at 16kHz
+    N_FRAMES  = 3000
 
     def __init__(self, sr=16000):
         super().__init__()
@@ -51,23 +58,30 @@ class WhisperLogMel(nn.Module):
             sample_rate=sr, n_fft=400, win_length=400, hop_length=160,
             n_mels=80, f_min=0.0, f_max=8000.0, power=2.0,
             window_fn=torch.hann_window, normalized=False,
+            mel_scale="slaney", norm="slaney",
         )
 
     def forward(self, x):
+        # Pad waveform to 30s (Whisper standard), not mel output
+        if x.shape[-1] < self.N_SAMPLES:
+            x = F.pad(x, (0, self.N_SAMPLES - x.shape[-1]))
+        else:
+            x = x[..., :self.N_SAMPLES]
         mel = self.mel(x)
         log_mel = torch.log10(mel.clamp(min=1e-10))
         max_val = log_mel.amax(dim=(-2, -1), keepdim=True)
         log_mel = torch.maximum(log_mel, max_val - 8.0)
         log_mel = (log_mel + 4.0) / 4.0
-        if log_mel.shape[-1] < self.N_FRAMES:
-            log_mel = F.pad(log_mel, (0, self.N_FRAMES - log_mel.shape[-1]))
-        else:
-            log_mel = log_mel[..., :self.N_FRAMES]
-        return log_mel
+        return log_mel[..., :self.N_FRAMES]
 
+
+# ══════════════════════════════════════════════════════════════
+# Fix 4: STFT loss matching TAPS official config
+# ══════════════════════════════════════════════════════════════
 
 class MultiResolutionSTFTLoss(nn.Module):
-    def __init__(self, resolutions=((512, 128, 512), (1024, 256, 1024), (2048, 512, 2048))):
+    """TAPS official: (n_fft, hop, win) with 0.5 coefficients for SC and Mag."""
+    def __init__(self, resolutions=((1024, 120, 600), (2048, 240, 1200), (512, 50, 240))):
         super().__init__()
         self.resolutions = resolutions
 
@@ -79,7 +93,7 @@ class MultiResolutionSTFTLoss(nn.Module):
         tgt_mag = tgt_stft.abs()
         sc = torch.norm(tgt_mag - est_mag, p='fro') / (torch.norm(tgt_mag, p='fro') + 1e-8)
         mag = F.l1_loss(torch.log(est_mag + 1e-8), torch.log(tgt_mag + 1e-8))
-        return sc + mag
+        return 0.5 * sc + 0.5 * mag  # TAPS official coefficients
 
     def forward(self, est, target):
         loss = 0
@@ -88,19 +102,27 @@ class MultiResolutionSTFTLoss(nn.Module):
         return loss / len(self.resolutions)
 
 
+# ══════════════════════════════════════════════════════════════
+# Fix 3: Dataset - exclude utterances > max_sec (don't truncate)
+# ══════════════════════════════════════════════════════════════
+
 class TAPSPairDataset(Dataset):
     def __init__(self, split, max_sec=15.0):
         self.samples = []
+        n_excluded = 0
         meta = TAPS_DIR / f'metadata_{split}.csv'
         with open(meta, encoding='utf-8') as f:
             for row in csv.DictReader(f):
                 sid, uid = row['speaker_id'], row['sentence_id']
+                dur = float(row.get('duration', 0))
+                if dur > max_sec:
+                    n_excluded += 1
+                    continue
                 t = TAPS_DIR / 'throat'   / split / f'{sid}_{uid}.wav'
                 a = TAPS_DIR / 'acoustic' / split / f'{sid}_{uid}.wav'
                 if t.exists() and a.exists():
                     self.samples.append((t, a, row['text']))
-        self.max_len = int(max_sec * TARGET_SR)
-        print(f'  [{split}] {len(self.samples)} pairs')
+        print(f'  [{split}] {len(self.samples)} pairs (excluded {n_excluded} > {max_sec}s)')
 
     def __len__(self):
         return len(self.samples)
@@ -111,11 +133,15 @@ class TAPSPairDataset(Dataset):
         a_wav, _ = sf.read(a_path, dtype='float32')
         if t_wav.ndim > 1: t_wav = t_wav.mean(axis=1)
         if a_wav.ndim > 1: a_wav = a_wav.mean(axis=1)
-        min_len = min(len(t_wav), len(a_wav), self.max_len)
+        min_len = min(len(t_wav), len(a_wav))
         return torch.from_numpy(t_wav[:min_len]), torch.from_numpy(a_wav[:min_len]), text
 
 
-def collate_fn(batch, tokenizer=None):
+# ══════════════════════════════════════════════════════════════
+# Fix 2: Collate - proper label handling (keep EOS, remove BOS)
+# ══════════════════════════════════════════════════════════════
+
+def collate_fn(batch, tokenizer=None, decoder_start_token_id=None):
     t_wavs, a_wavs, texts = zip(*batch)
     max_len = max(t.shape[0] for t in t_wavs)
     def pad(wavs):
@@ -123,21 +149,35 @@ def collate_fn(batch, tokenizer=None):
 
     labels = tokenizer(texts, return_tensors='pt', padding=True)
     label_ids = labels['input_ids']
-    # -100 for padding tokens (ignore in CE loss)
-    label_ids[label_ids == tokenizer.pad_token_id] = -100
+
+    # Remove BOS (decoder_start_token_id) from start if present
+    # WhisperForConditionalGeneration.shift_tokens_right adds it internally
+    if decoder_start_token_id is not None and label_ids.shape[1] > 0:
+        if (label_ids[:, 0] == decoder_start_token_id).all():
+            label_ids = label_ids[:, 1:]
+
+    # Mask padding with -100, but keep EOS (even if same token ID)
+    # EOS is the last non-pad token - don't mask it
+    attention_mask = labels.get('attention_mask')
+    if attention_mask is not None:
+        # Trim attention_mask to match label_ids after BOS removal
+        if attention_mask.shape[1] > label_ids.shape[1]:
+            attention_mask = attention_mask[:, 1:]
+        label_ids = label_ids.masked_fill(attention_mask == 0, -100)
+    else:
+        label_ids[label_ids == tokenizer.pad_token_id] = -100
 
     return pad(t_wavs), pad(a_wavs), label_ids
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lambda_asr', type=float, default=5.0)
+    parser.add_argument('--lambda_asr', type=float, default=2.0)
     parser.add_argument('--epochs',     type=int,   default=50)
-    parser.add_argument('--batch_size', type=int,   default=4,
-                        help='Full Whisper forward requires more VRAM, use smaller batch')
+    parser.add_argument('--batch_size', type=int,   default=4)
     parser.add_argument('--lr',         type=float, default=3e-4)
     parser.add_argument('--patience',   type=int,   default=5)
-    parser.add_argument('--tag',        type=str,   default='ce_lambda_5.0')
+    parser.add_argument('--tag',        type=str,   default='ce_v2_lambda_2.0')
     parser.add_argument('--no_recon',   action='store_true',
                         help='CE loss only (no L1+STFT reconstruction loss)')
     args = parser.parse_args()
@@ -145,7 +185,7 @@ def main():
     ckpt_dir = BASE_DIR / 'checkpoints' / args.tag
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f'\n=== SE-Conformer ASR-aware (Cross-Entropy Loss) ===')
+    print(f'\n=== SE-Conformer ASR-aware CE (v2 fixed) ===')
     print(f'lambda={args.lambda_asr} | tag={args.tag} | device={DEVICE}\n')
 
     # SE model
@@ -158,7 +198,7 @@ def main():
     n_params = sum(p.numel() for p in se_model.parameters() if p.requires_grad)
     print(f'SE-Conformer: pretrained loaded ({n_params/1e6:.1f}M params)')
 
-    # STFT loss
+    # STFT loss (TAPS official params)
     stft_loss_fn = MultiResolutionSTFTLoss().to(DEVICE)
 
     # Whisper (full model, frozen)
@@ -170,11 +210,13 @@ def main():
     print('Whisper (full): frozen')
 
     tokenizer = processor.tokenizer
+    decoder_start_id = whisper.config.decoder_start_token_id
+
     # Force Korean
     forced_decoder_ids = processor.get_decoder_prompt_ids(language='ko', task='transcribe')
     whisper.config.forced_decoder_ids = forced_decoder_ids
 
-    # log-mel
+    # log-mel (Whisper-compatible)
     log_mel_fn = WhisperLogMel().to(DEVICE)
 
     # Data
@@ -183,7 +225,7 @@ def main():
     dev_ds   = TAPSPairDataset('dev')
 
     from functools import partial
-    collate = partial(collate_fn, tokenizer=tokenizer)
+    collate = partial(collate_fn, tokenizer=tokenizer, decoder_start_token_id=decoder_start_id)
 
     n_workers = min(2, os.cpu_count() or 0)
     train_dl = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
@@ -211,7 +253,6 @@ def main():
             a_wav = a_wav.to(DEVICE)
             label_ids = label_ids.to(DEVICE)
 
-            # SE + recon loss in fp32 (STFT needs fp32)
             se_out = se_model(t_wav).squeeze(1)
             min_len = min(se_out.shape[-1], a_wav.shape[-1])
             se_t = se_out[..., :min_len]
@@ -225,7 +266,6 @@ def main():
                 l_recon = torch.zeros(1, device=DEVICE)
 
             if args.lambda_asr > 0:
-                # Whisper forward in fp16 (main speedup)
                 with torch.amp.autocast('cuda'):
                     mel_se = log_mel_fn(se_t)
                     encoder_out = whisper.model.encoder(mel_se)

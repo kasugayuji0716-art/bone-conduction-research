@@ -51,7 +51,9 @@ TAPS_SE_CONFIG = dict(
 # ══════════════════════════════════════════════════════════════
 
 class WhisperLogMel(nn.Module):
-    N_FRAMES = 3000
+    """Differentiable log-mel matching Whisper's WhisperFeatureExtractor."""
+    N_SAMPLES = 480000  # 30 seconds at 16kHz
+    N_FRAMES  = 3000
 
     def __init__(self, sr=16000):
         super().__init__()
@@ -59,19 +61,20 @@ class WhisperLogMel(nn.Module):
             sample_rate=sr, n_fft=400, win_length=400, hop_length=160,
             n_mels=80, f_min=0.0, f_max=8000.0, power=2.0,
             window_fn=torch.hann_window, normalized=False,
+            mel_scale="slaney", norm="slaney",
         )
 
     def forward(self, x):
+        if x.shape[-1] < self.N_SAMPLES:
+            x = F.pad(x, (0, self.N_SAMPLES - x.shape[-1]))
+        else:
+            x = x[..., :self.N_SAMPLES]
         mel = self.mel(x)
         log_mel = torch.log10(mel.clamp(min=1e-10))
         max_val = log_mel.amax(dim=(-2, -1), keepdim=True)
         log_mel = torch.maximum(log_mel, max_val - 8.0)
         log_mel = (log_mel + 4.0) / 4.0
-        if log_mel.shape[-1] < self.N_FRAMES:
-            log_mel = F.pad(log_mel, (0, self.N_FRAMES - log_mel.shape[-1]))
-        else:
-            log_mel = log_mel[..., :self.N_FRAMES]
-        return log_mel
+        return log_mel[..., :self.N_FRAMES]
 
 
 # ══════════════════════════════════════════════════════════════
@@ -84,10 +87,10 @@ def l1_waveform_loss(est, target):
 
 
 class MultiResolutionSTFTLoss(nn.Module):
-    """Multi-resolution STFT loss (TAPS論文で使用)"""
-    def __init__(self, resolutions=((512, 128, 512), (1024, 256, 1024), (2048, 512, 2048))):
+    """TAPS official config: (n_fft, hop, win) with 0.5 coefficients."""
+    def __init__(self, resolutions=((1024, 120, 600), (2048, 240, 1200), (512, 50, 240))):
         super().__init__()
-        self.resolutions = resolutions  # (n_fft, hop_length, win_length)
+        self.resolutions = resolutions
 
     def _stft_loss(self, est, target, n_fft, hop_length, win_length):
         window = torch.hann_window(win_length, device=est.device)
@@ -95,10 +98,9 @@ class MultiResolutionSTFTLoss(nn.Module):
         tgt_stft = torch.stft(target, n_fft, hop_length, win_length, window, return_complex=True)
         est_mag = est_stft.abs()
         tgt_mag = tgt_stft.abs()
-        # Spectral convergence + Log-magnitude L1
         sc = torch.norm(tgt_mag - est_mag, p='fro') / (torch.norm(tgt_mag, p='fro') + 1e-8)
         mag = F.l1_loss(torch.log(est_mag + 1e-8), torch.log(tgt_mag + 1e-8))
-        return sc + mag
+        return 0.5 * sc + 0.5 * mag
 
     def forward(self, est, target):
         loss = 0
@@ -114,16 +116,20 @@ class MultiResolutionSTFTLoss(nn.Module):
 class TAPSPairDataset(Dataset):
     def __init__(self, split, max_sec=15.0):
         self.samples = []
+        n_excluded = 0
         meta = TAPS_DIR / f'metadata_{split}.csv'
         with open(meta, encoding='utf-8') as f:
             for row in csv.DictReader(f):
                 sid, uid = row['speaker_id'], row['sentence_id']
+                dur = float(row.get('duration', 0))
+                if dur > max_sec:
+                    n_excluded += 1
+                    continue
                 t = TAPS_DIR / 'throat'   / split / f'{sid}_{uid}.wav'
                 a = TAPS_DIR / 'acoustic' / split / f'{sid}_{uid}.wav'
                 if t.exists() and a.exists():
                     self.samples.append((t, a))
-        self.max_len = int(max_sec * TARGET_SR)
-        print(f'  [{split}] {len(self.samples)} pairs')
+        print(f'  [{split}] {len(self.samples)} pairs (excluded {n_excluded} > {max_sec}s)')
 
     def __len__(self):
         return len(self.samples)
@@ -134,7 +140,7 @@ class TAPSPairDataset(Dataset):
         a_wav, _ = sf.read(a_path, dtype='float32')
         if t_wav.ndim > 1: t_wav = t_wav.mean(axis=1)
         if a_wav.ndim > 1: a_wav = a_wav.mean(axis=1)
-        min_len = min(len(t_wav), len(a_wav), self.max_len)
+        min_len = min(len(t_wav), len(a_wav))
         return torch.from_numpy(t_wav[:min_len]), torch.from_numpy(a_wav[:min_len])
 
 
