@@ -313,7 +313,83 @@ conformer_depth=4, depthwise_conv_kernel_size=15
 
 ## 参考文献
 
-1. T. Ochiai et al., "Rethinking Processing Distortions," IEEE/ACM Trans. ASLP, vol. 32, 2024
-2. C.O. Mawalim, M. Okada, and M. Unoki, Proc. Interspeech, DOI: 10.21437/Interspeech.2024-129, 2024
+1. T. Ochiai et al., "Rethinking Processing Distortions: Disentangling the Impact of SE Errors on ASR," IEEE/ACM Trans. ASLP, vol. 32, 2024
+2. C.O. Mawalim, S. Okada, and M. Unoki, Proc. Interspeech, DOI: 10.21437/Interspeech.2024-129, 2024
 3. G. Close, W. Ravenscroft, T. Hain, and S. Goetze, "Perceive and Predict," Proc. ICASSP, 2023
-4. Y. Kim et al., "TAPS Dataset," Scientific Data (Nature), 2026. arXiv:2502.11478
+4. Y. Kim et al., "TAPS Dataset," Scientific Data (Nature), DOI: 10.1038/s41597-026-07268-2, 2026
+
+---
+
+# ★ v2 修正版結果（2026年9月22日）
+
+## v1→v2の修正内容
+
+| # | 修正 | 影響 |
+|---|---|---|
+| 1 | WhisperLogMel: Slaney mel scale/norm + 波形パディング | 前処理がWhisper標準に一致 |
+| 2 | CE教師ラベル: EOS保持、BOS除去 | 正しい教師信号 |
+| 3 | 15秒超の発話を除外（切り出し→除外） | 音声-テキスト不一致解消 |
+| 4 | STFT損失パラメータをTAPS公式に合わせる | 公平な比較 |
+| 5 | λ選択をdevで行い、testは最終評価のみ | 正しい実験プロトコル |
+
+## v2 CE損失λ探索（devで選択→testで評価）
+
+| 条件 | dev CER | test CER | vs TAPS test |
+|---|---|---|---|
+| No SE | 0.431 | 0.471 | — |
+| TAPS pretrained | 0.285 | 0.252 | — |
+| CE λ=0.1 | 0.278 | 0.241 | -4.3% |
+| CE λ=0.5 | 0.266 | 0.232 | -7.8% |
+| CE λ=1.0 | 0.262 | 0.228 | -9.4% |
+| CE λ=2.0 | 0.246 | 0.216 | -14.3% |
+| CE λ=5.0 | 0.235 | 0.202 | -19.7% |
+| **CE λ=10.0** | **0.232** | **0.200** | **-20.7%** |
+
+best on dev: λ=10.0
+
+## v2 Cross-ASR（script 54）
+
+| SE条件 | W-base | W-small | W-medium |
+|---|---|---|---|
+| No SE | 0.671 | 0.470 | 0.360 |
+| TAPS pretrained | 0.294 | 0.252 | 0.219 |
+| Enc L1 (λ=5.0) | 0.298 | 0.251 | 0.218 |
+| **CE (λ=10.0)** | **0.287** | **0.200** | **0.189** |
+
+## v2 STOI/PESQ（script 55）
+
+| 条件 | STOI | PESQ | CER(small) |
+|---|---|---|---|
+| No SE | 0.697 | 1.224 | 0.471 |
+| TAPS pretrained | 0.892 | 1.975 | 0.252 |
+| Enc L1 (λ=5.0) | 0.878 | 1.775 | 0.251 |
+| CE (λ=10.0) | 0.792 | 1.215 | 0.200 |
+
+## v2 Encoder距離分析（script 58）
+
+| SE条件 | base L1 | small L1 | medium L1 |
+|---|---|---|---|
+| No SE | 0.367 | 0.386 | 0.408 |
+| TAPS pretrained | 0.157 | 0.200 | 0.226 |
+| Enc L1 (λ=5.0) | 0.157 | 0.192 | 0.224 |
+| CE (λ=10.0) | 0.236 | 0.326 | 0.346 |
+
+核心的発見が再確認: CE損失はencoder距離を大幅に増加させているのにCER最良
+
+## v2 統計検定（script 56）
+- Wilcoxon: W=43350.5, p=3.38×10⁻⁹³
+
+## v2 Ablation（script 57）
+- CE+recon (λ=10.0): CER 0.200
+- CE only (λ=10.0): CER 0.205
+
+## v1 → v2 比較
+
+| 指標 | v1（バグあり） | v2（修正後） |
+|---|---|---|
+| best λ | 2.0（test選択） | **10.0（dev選択）** |
+| test CER | 0.229 | **0.200** |
+| vs TAPS | -9.3% | **-20.7%** |
+| Wilcoxon p | 2.75×10⁻²⁵ | **3.38×10⁻⁹³** |
+
+v2チェックポイント名: `ce_v2_lambda_*`, `enc_v2_lambda_5.0`, `ce_v2_only_lambda_10.0`
