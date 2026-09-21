@@ -1,0 +1,13 @@
+asr_model,se_condition,se_label,cer_mean,n_utts
+whisper-base,no_se,No SE,0.6706313841142005,1000
+whisper-base,taps_pretrained,TAPS pretrained,0.29375755462815994,1000
+whisper-base,enc_best,Enc L1 (λ=5.0),0.29824589648116534,1000
+whisper-base,ce_best,CE (λ=10.0),0.28729241135514005,1000
+whisper-small,no_se,No SE,0.47035186515724803,1000
+whisper-small,taps_pretrained,TAPS pretrained,0.2517472051574688,1000
+whisper-small,enc_best,Enc L1 (λ=5.0),0.25147574300973646,1000
+whisper-small,ce_best,CE (λ=10.0),0.1998015683968611,1000
+whisper-medium,no_se,No SE,0.3597993151376413,1000
+whisper-medium,taps_pretrained,TAPS pretrained,0.2189641284157338,1000
+whisper-medium,enc_best,Enc L1 (λ=5.0),0.21819098355774963,1000
+whisper-medium,ce_best,CE (λ=10.0),0.1885143475365081,1000
