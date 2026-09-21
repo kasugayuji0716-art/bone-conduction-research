@@ -28,8 +28,8 @@ TAPS_SE_CONFIG = dict(
 SE_CONDITIONS = [
     ('no_se',           'No SE',                None),
     ('taps_pretrained', 'TAPS pretrained',      BASE_DIR / 'taps-baselines' / 'pretrained' / 'seconformer.th'),
-    ('enc_best',        'Enc L1 (λ=5.0)',       BASE_DIR / 'checkpoints' / 'lambda_5.0' / 'best.th'),
-    ('ce_best',         'CE (λ=2.0)',           BASE_DIR / 'checkpoints' / 'ce_lambda_2.0' / 'best.th'),
+    ('enc_best',        'Enc L1 (λ=5.0)',       BASE_DIR / 'checkpoints' / 'enc_v2_lambda_5.0' / 'best.th'),
+    ('ce_best',         'CE (λ=10.0)',          BASE_DIR / 'checkpoints' / 'ce_v2_lambda_10.0' / 'best.th'),
 ]
 
 def _asr_path(name):

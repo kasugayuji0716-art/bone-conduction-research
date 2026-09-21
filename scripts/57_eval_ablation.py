@@ -26,10 +26,10 @@ TAPS_SE_CONFIG = dict(
 )
 
 CONDITIONS = [
-    ('no_se',       'No SE',            None),
-    ('taps',        'TAPS pretrained',  BASE_DIR / 'taps-baselines' / 'pretrained' / 'seconformer.th'),
-    ('ce_recon',    'CE+recon (λ=2.0)', BASE_DIR / 'checkpoints' / 'ce_lambda_2.0' / 'best.th'),
-    ('ce_only',     'CE only (λ=2.0)',  BASE_DIR / 'checkpoints' / 'ce_only_lambda_2.0' / 'best.th'),
+    ('no_se',       'No SE',             None),
+    ('taps',        'TAPS pretrained',   BASE_DIR / 'taps-baselines' / 'pretrained' / 'seconformer.th'),
+    ('ce_recon',    'CE+recon (λ=10.0)', BASE_DIR / 'checkpoints' / 'ce_v2_lambda_10.0' / 'best.th'),
+    ('ce_only',     'CE only (λ=10.0)',  BASE_DIR / 'checkpoints' / 'ce_v2_only_lambda_10.0' / 'best.th'),
 ]
 
 
