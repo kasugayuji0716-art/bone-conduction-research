@@ -1,7 +1,7 @@
 const fs = require("fs");
 const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
         AlignmentType, HeadingLevel, BorderStyle, WidthType,
-        ShadingType, SectionType } = require("docx");
+        ShadingType, SectionType, ImageRun } = require("docx");
 
 // ── ASJ: A4, 22mm LR, 18mm TB, 2-column ──
 const mm = v => Math.round(v * 56.69);
@@ -147,6 +147,7 @@ const content = [
     ["\u03BB", "dev CER", "test CER", "\u0394 vs TAPS"],
     [
       ["TAPS pretrained", "0.285", "0.252", "\u2014"],
+      ["\u03BB=0（再構成のみ）", "0.286", "0.257", "+2.1%"],
       ["CE \u03BB=1.0", "0.262", "0.228", "-9.5%"],
       ["CE \u03BB=2.0", "0.246", "0.216", "-14.4%"],
       ["CE \u03BB=5.0", "0.235", "0.202", "-19.8%"],
@@ -156,7 +157,7 @@ const content = [
   ),
   cap("表1: CE損失の\u03BB値とCER（\u03BBはdev CERで選択）"),
 
-  p([txt("また、再構成損失（L1+STFT）の効果を検証するablation実験を行った。CE損失のみ（再構成損失なし、"), mi("\u03BB"), txt(" = 10.0）で学習した場合のtest CERは0.205であり、TAPS pretrained（0.252）を上回るものの、再構成損失を加えた場合（0.200）と比較するとCERが高い。再構成損失の追加がCERの低下に寄与していることが観測された。")]),
+  p([txt("また、再構成損失（L1+STFT）の効果を検証するablation実験を行った。CE損失のみ（再構成損失なし、"), mi("\u03BB"), txt(" = 10.0）で学習した場合のtest CERは0.205であり、TAPS pretrained（0.252）を上回るものの、再構成損失を加えた場合（0.200）と比較するとCERが高い。再構成損失の追加がCERの低下に寄与していることが観測された。逆に、CE損失を用いず再構成損失のみで同一条件の追加学習（"), mi("\u03BB"), txt(" = 0）を行った場合のtest CERは0.257であり、TAPS pretrained（0.252）から改善しなかった。したがって、CERの低下は追加学習そのものではなくCE損失の導入によるものと考えられる。")]),
 
   h2("4.2 別ASRモデルでの評価"),
   p([txt("表2に、Whisper-smallで学習したCE-aware SEを異なるサイズのWhisperモデルで評価した結果を示す。提案手法（CE "), mi("\u03BB"), txt(" = 10.0）は全3モデルでTAPS pretrainedよりCERが低下した。Whisper-smallでは相対20.7%、mediumでは13.9%の低下が観測された。Whisper-baseでは2.2%の低下にとどまった。一方、encoder距離損失（Enc L1 "), mi("\u03BB"), txt(" = 5.0）はTAPS pretrainedとほぼ同等のCERにとどまった。")]),
@@ -208,6 +209,29 @@ const content = [
 
   p([txt("この結果は、従来報告されてきた現象 — SEによりSTOI・PESQが改善するにも関わらずCERが悪化する[1][2] — の逆パターンを示している。すなわち、STOI・PESQが低下するにも関わらずCERが改善する現象が観測された。STOI・PESQの最適化とCERの最適化は双方向に乖離しうることを示しており、「気導音声への復元」を目標とする従来SEの前提が、ASR応用には最適でない可能性を示唆する。")]),
 
+  h2("4.5 スペクトル分析"),
+  p([txt("CE損失がSE出力をどのように変化させたかを調べるため、test 100発話（10話者×10発話）の平均パワースペクトルを求め、移動中央値で包絡成分を除去した残差を比較した（図1）。TAPS pretrainedと気導音声の残差には規則的な構造が見られないのに対し、CE（"), mi("\u03BB"), txt(" = 10.0）の出力には3.0\u20137.75 kHzの250 Hz間隔の位置に10\u201320 dBの鋭いピークが並ぶ櫛状の成分が現れた。")]),
+  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 60, after: 0 },
+    children: [new ImageRun({ type: "png", data: fs.readFileSync(__dirname + "/figures/peak_periodicity_top.png"),
+      transformation: { width: 300, height: 99 } })] }),
+  cap("図1: 包絡除去後の平均スペクトル（灰線: 250 Hz間隔）"),
+  p([txt("表5に、4\u20138 kHzにおける250 Hz格子上の残差の平均（ピーク高さ）を示す。ピーク高さは"), mi("\u03BB"), txt("とともに単調に増加し、再構成損失を除いたCE onlyで最大となった。"), mi("\u03BB"), txt(" = 0ではTAPS pretrainedと同程度であることから、この成分はCE損失によって生じたものである。250 Hzは本SE-Conformerの最深層の時間解像度（4倍アップサンプル後にstride 4の層を4段通過: 64 kHz / 4"), sup("4"), txt("）と一致しており、転置畳み込みによるアップサンプリング由来の成分である可能性があるが、原因の特定は今後の課題である。")]),
+  tbl(
+    ["条件", "ピーク高さ", "対照"],
+    [
+      ["気導音声", "0.2 dB", "0.1 dB"],
+      ["TAPS pretrained", "2.6 dB", "0.3 dB"],
+      ["\u03BB=0（再構成のみ）", "2.8 dB", "0.0 dB"],
+      ["CE \u03BB=1.0", "6.7 dB", "1.0 dB"],
+      ["CE \u03BB=5.0", "10.1 dB", "0.3 dB"],
+      ["CE \u03BB=10.0", "12.5 dB", "0.5 dB"],
+      ["CE only \u03BB=10.0", "15.4 dB", "1.8 dB"],
+    ],
+    [1800, 1200, 1200]
+  ),
+  cap("表5: 250 Hz格子上の残差（4\u20138 kHz、対照は格子の中間位置）"),
+  // TODO(script 62 Part B): 櫛位置ノッチ・4 kHz帯域入替の結果をここに追記（ピークがCER改善に寄与するか）
+
   // ────────────────────────────────────────────────
   // 5. 考察とまとめ
   // ────────────────────────────────────────────────
@@ -215,9 +239,10 @@ const content = [
 
   p([txt("本研究では、Whisperの交差エントロピー損失をSE学習に直接組み込むASR-aware SEを提案し、韓国語喉マイクデータセットTAPSで評価した。主要な知見を以下にまとめる。")]),
 
-  p([txt("第一に、提案手法（CE "), mi("\u03BB"), txt(" = 10.0）はTAPS pretrainedベースラインと比較してCERを20.7%低下させた（0.252→0.200、"), mi("p"), txt(" = 3.38\u00D710"), sup("-93"), txt("）。話者平均を単位とした検定でも有意であった（"), mi("p"), txt(" = 0.002）。第二に、この改善は学習に使用したWhisper-small以外のサイズ（base・medium）にもCERの低下として観測された。第三に、encoder距離分析（表3）により、気導参照へのencoder L1距離の低下だけではCER改善を説明できないことが示唆された。CE損失で学習したSEはencoder空間において気導音声からむしろ離れるが、CERは低下している。")]),
+  p([txt("第一に、提案手法（CE "), mi("\u03BB"), txt(" = 10.0）はTAPS pretrainedベースラインと比較してCERを20.7%低下させた（0.252→0.200、"), mi("p"), txt(" = 3.38\u00D710"), sup("-93"), txt("）。話者平均を単位とした検定でも有意であった（"), mi("p"), txt(" = 0.002）。第二に、この改善は学習に使用したWhisper-small以外のサイズ（base・medium）にもCERの低下として観測された。第三に、encoder距離分析（表3）により、気導参照へのencoder L1距離の低下だけではCER改善を説明できないことが示唆された。CE損失で学習したSEはencoder空間において気導音声からむしろ離れるが、CERは低下している。第四に、スペクトル分析により、CE損失は気導音声には存在しない250 Hz間隔の櫛状成分をSE出力に生じさせることが明らかになった（図1、表5）。")]),
 
   p([txt("一方、提案手法のCER 0.200はWhisperファインチューニング（CER 0.136）には及ばない。しかし、SEは波形前処理として異なるASRに接続できる利点があり、今回評価した3サイズには同一SEを再学習なしで適用できた。本研究はWhisper系列内での評価に限られており、異なるASRアーキテクチャや他言語への汎化は今後の検証課題である。")]),
+  // TODO(script 62 Part A): 非Whisper系CTC（MMS-1B, XLS-R韓国語）の結果で上の限界記述を置き換える
 
   // ────────────────────────────────────────────────
   // 参考文献
