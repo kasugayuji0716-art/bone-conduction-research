@@ -174,7 +174,7 @@ def main():
 
         # === Figure 2: Difference spectrograms ===
         if 'TAPS pretrained' in se_wavs and 'CE (λ=10.0)' in se_wavs:
-            fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+            fig, axes = plt.subplots(1, 3, figsize=(18, 5), layout='constrained')
 
             plot_difference(axes[0], t_wav, se_wavs['TAPS pretrained'],
                           'TAPS - NoSE (dB)')
@@ -189,7 +189,6 @@ def main():
             fig.colorbar(im, ax=axes, label='dB difference', shrink=0.8)
             fig.suptitle(f'Spectral Differences: {s["speaker"]}_{s["uid"]}',
                         fontsize=13, fontweight='bold')
-            fig.tight_layout()
             out_path = out_dir / f'specdiff_{s["speaker"]}_{s["uid"]}.png'
             fig.savefig(out_path, dpi=150, bbox_inches='tight')
             plt.close(fig)
