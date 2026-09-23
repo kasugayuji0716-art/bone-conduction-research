@@ -435,3 +435,27 @@ v2チェックポイント名: `ce_v2_lambda_*`, `enc_v2_lambda_5.0`, `ce_v2_onl
   → **Part B**（whisper-small）: 櫛位置ノッチ / 4 kHz LPF / 4 kHzで低域・高域をTAPS↔CE入れ替え。TAPSにも同処理で対照
 - 判定: CE+notch ≈ 0.200 → ピークは無害な副産物。大きく悪化 → CEはピーク依存（限界として明記）
 - 出力: `results/robustness_per_utt.csv`（再開可）、`results/robustness_summary.csv`
+
+---
+
+# ★ 確定値（句読点正規化・全test 1000発話・話者単位Wilcoxon n=10）2026-09-24
+出典: scripts 62/63/64、results/retranscribe_summary.csv, robustness_per_utt.csv。CER = 句読点除去後（nopunct）、cap 1.0。
+
+| 比較 | CER | 相対 | 改善話者 | p(spk) |
+|---|---|---|---|---|
+| W-small: TAPS → CE λ=10 | 0.2302 → 0.1956 | −15.0% | 10/10 | 0.002 |
+| W-small: TAPS → λ=0 | 0.2302 → 0.2352 | +2.2% | 3/10 | 0.049 |
+| W-small: TAPS → CE only | 0.2302 → 0.2033 | −11.7% | 10/10 | 0.002 |
+| W-small: TAPS → Enc L1 | 0.2302 → 0.2303 | 0% | 5/10 | 1.0 |
+| W-medium: TAPS → CE | 0.1966 → 0.1686 | −14.2% | 10/10 | 0.002 |
+| W-base: TAPS → CE | 0.2725 → 0.2678 | −1.8% | 6/10 | 0.23（n.s.） |
+| XLS-R: TAPS → CE | 0.2217 → 0.2788 | +25.8% | 0/10 | 0.002 |
+| XLS-R: λ=0 → CE | 0.2306 → 0.2788 | +20.9% | 0/10 | 0.002 |
+| MMS: TAPS → CE | 0.3501 → 0.3536 | +1.0% | 3/10 | 0.375（n.s.） |
+| FT: SEなし → CE-SE | 0.1375 → 0.1213 | −11.8% | 5/10 | 0.375（n.s.） |
+| FT: SEなし → TAPS | 0.1375 → 0.1459 | +6.1% | 3/10 | 0.193（n.s.） |
+
+- 句読点の寄与: raw改善 −0.0522 のうち 0.0176（34%）。文末句点率 TAPS 94% → CE 1%
+- λ再選択（dev nopunct）: λ=10（0.2274）。λ=2/5/10 はほぼ横ばい（0.231/0.232/0.227）
+- 帯域（W-small, nopunct）: CE+櫛ノッチ +4.3%（0/10, p=0.002）→ 櫛は改善の一部（約1/4）を担う。CE低域+TAPS高域 −12.5%（改善の約83%）→ 主因は4 kHz以下。TAPS に4 kHz LPF で −3.8%（10/10）→ TAPSの高域補間はWhisperに有害
+- FT Whisper は dl-box5 で再学習（dev CER最良 epoch 2）
