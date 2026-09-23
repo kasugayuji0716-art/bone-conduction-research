@@ -162,7 +162,7 @@ const content = [
 
   // ────────────────────────────────────────────────
   h1("5. 考察"),
-  p([txt("以上の結果は、CE損失で学習したSEが、学習に用いた認識器に向けて入力を調整する「波形領域のアダプタ」として働くことを示唆する。その効果はWhisper系列内には持ち越されるが、系列外の認識器では失われ、むしろ悪化する。一方、気導音声の表現に近づけるEnc L1は認識器を選ばない代わりに改善も小さい。ASR損失によるSEの学習には、対象の認識器への特化と汎用性のトレードオフが存在する。自己教師あり表現の損失で学習したSEは損失計算に用いていないモデルにも汎化するという報告[8]と合わせると、汎化の範囲は損失の種類によって決まると考えられる。")]),
+  p([txt("以上の結果は、CE損失で学習したSEが、学習に用いた認識器に向けて入力を調整する「波形領域のアダプタ」として働くことを示唆する。その効果はWhisper系列内には持ち越されるが、系列外の認識器では失われ、むしろ悪化する。一方、気導音声の表現に近づけるEnc L1は認識器を選ばない代わりに改善も小さい。ASR損失によるSEの学習には、対象の認識器への特化と汎用性のトレードオフが存在する。自己教師あり表現空間の距離を損失として学習したSEが複数の下流タスクで有効であるという報告[8]と合わせると、汎化の範囲は損失の種類に依存すると考えられる。")]),
   p([txt("また、未正規化のCERでは句読点出力の抑制が改善として計上された。ASR損失で学習したSEの評価では、テキストの正規化と、学習に用いていない系列の認識器による評価が必要である。")]),
   p([txt("本研究の限界として、各条件の学習が1回であること、"), mi("λ"), txt("の探索範囲が10までであること、韓国語のみの評価であることが挙げられる。")]),
 
@@ -177,9 +177,9 @@ const content = [
   ref("[3] G. Close, W. Ravenscroft, T. Hain, and S. Goetze, “Perceive and Predict: Self-Supervised Speech Representation Based Loss Functions for Speech Enhancement,” Proc. ICASSP, 2023."),
   ref("[4] Y. Kim, et al., “Throat and Acoustic Paired Speech Dataset for Deep Learning-Based Speech Enhancement,” Scientific Data, 2026."),
   ref("[5] D. Bagchi, P. Plantinga, A. Stiff, and E. Fosler-Lussier, “Spectral Feature Mapping with Mimic Loss for Robust Speech Recognition,” Proc. ICASSP, 2018."),
-  ref("[6] Y. Dissen, S. Yonash, I. Cohen, and J. Keshet, “Enhanced ASR Robustness to Packet Loss with a Front-End Adaptation Network,” Proc. Interspeech, 2024.【要確認】"),
-  ref("[7] K. Iwamoto, T. Ochiai, M. Delcroix, et al., “How Does End-to-End Speech Recognition Training Impact Speech Enhancement Artifacts?” Proc. ICASSP, 2024."),
-  ref("[8] H. Sato, T. Ochiai, M. Delcroix, et al., arXiv:2507.07631, 2025.【要確認：題目・掲載誌】"),
+  ref("[6] Y. Dissen, S. Yonash, I. Cohen, and J. Keshet, “Enhanced ASR Robustness to Packet Loss with a Front-End Adaptation Network,” Proc. Interspeech, 2024."),
+  ref("[7] K. Iwamoto, T. Ochiai, M. Delcroix, et al., “How Does End-to-End Speech Recognition Training Impact Speech Enhancement Artifacts?” Proc. ICASSP, pp. 11031–11035, 2024."),
+  ref("[8] H. Sato, T. Ochiai, M. Delcroix, et al., “Generic Speech Enhancement with Self-Supervised Representation Space Loss,” Frontiers in Signal Processing, vol. 5, 1587969, 2025."),
   ref("[9] V. Pratap, et al., “Scaling Speech Technology to 1,000+ Languages,” JMLR, vol. 25, 2024."),
   ref("[10] A. Babu, et al., “XLS-R: Self-supervised Cross-lingual Speech Representation Learning at Scale,” Proc. Interspeech, 2022."),
   ref("[11] A. Radford, et al., “Robust Speech Recognition via Large-Scale Weak Supervision,” Proc. ICML, 2023."),
