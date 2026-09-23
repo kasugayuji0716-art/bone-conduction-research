@@ -393,3 +393,45 @@ best on dev: λ=10.0
 | Wilcoxon p | 2.75×10⁻²⁵ | **3.38×10⁻⁹³** |
 
 v2チェックポイント名: `ce_v2_lambda_*`, `enc_v2_lambda_5.0`, `ce_v2_only_lambda_10.0`
+
+---
+
+# ★ 補足実験・査読対策（2026年9月24日）
+
+## v2 λ=0 対照（script 59）
+- 再構成損失のみで同条件の追加学習: dev CER 0.2855 / **test CER 0.2573**（TAPS 0.252よりわずかに悪化）
+- → 改善（0.200）は追加学習そのものではなく **CE損失の導入** による（1 runのみ）
+
+## スペクトログラム比較（script 60, p00 u10–u12）
+- 図: `results/figures/{spectrogram,specdiff,spectral_envelope}_p00_u1{0,1,2}.png`
+- 4 kHz以下: TAPS・CEとも喉マイクの低域過多（0–1 kHzで約+20 dB）を気導レベルまで補正。2–3.3 kHzは両者とも気導より5–10 dB低い
+- 4 kHz以上: TAPSは滑らかに補間（気導に近い）。**CEは等間隔の鋭いピーク（櫛状）＋無音区間の残留ノイズ**
+- 3発話で同じ周波数にピーク → 発話内容に依存しない固定成分
+- バグ修正: STFTにhop間引きがなく1サンプル毎フレーム（数百MB/図）→ WSLがコード15で落ちていた原因。修正済み
+
+## 櫛状ピークの周期性検証（script 61, test 100発話 = 10話者×10）
+- CE λ=10: **3.0–7.75 kHzの250 Hz格子**に+10〜20 dBのピーク（1 kHz, 2 kHzにも小ピーク）。4k/6kなど偶数倍が特に強い
+- 250 Hz = SE-Conformerの最深層フレームレート（16k×resample 4 / stride 4⁴）→ ConvTranspose由来の仮説と整合（構造原因は未証明）
+
+| 条件 | 250 Hz格子ピーク (4–8k, dB) | 対照（格子中間） |
+|---|---|---|
+| Acoustic | 0.22 | 0.11 |
+| TAPS pretrained | 2.55 | 0.26 |
+| CE λ=0 | 2.82 | 0.00 |
+| Enc L1 λ=5 | 3.47 | 0.35 |
+| CE λ=1 | 6.71 | 0.96 |
+| CE λ=5 | 10.08 | 0.34 |
+| CE λ=10 | 12.48 | 0.52 |
+| CE only λ=10 | 15.44 | 1.77 |
+
+- **λに対して単調増加、λ=0ではTAPS同等** → ピークはCE損失が生む。再構成損失が一部抑制
+- CSV: `results/peak_periodicity.csv`、図: `results/figures/peak_periodicity.png`
+
+## 査読リスクと対策（script 62, 実行中）
+想定批判: 「CE-SEはWhisperにだけ効く人工成分（敵対的サンプル的）を足しているのでは」
+- 弱点1: 汎化確認がWhisper系列（base/small/medium）のみ
+  → **Part A**: 非Whisper CTC（facebook/mms-1b-all kor, kresnik/wav2vec2-large-xlsr-korean）で No SE/TAPS/Enc L1/CE λ=0/CE λ=10 を評価
+- 弱点2: 櫛状ピークがCER改善を担っているか不明
+  → **Part B**（whisper-small）: 櫛位置ノッチ / 4 kHz LPF / 4 kHzで低域・高域をTAPS↔CE入れ替え。TAPSにも同処理で対照
+- 判定: CE+notch ≈ 0.200 → ピークは無害な副産物。大きく悪化 → CEはピーク依存（限界として明記）
+- 出力: `results/robustness_per_utt.csv`（再開可）、`results/robustness_summary.csv`
