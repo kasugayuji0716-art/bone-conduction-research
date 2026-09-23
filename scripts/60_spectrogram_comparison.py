@@ -49,7 +49,7 @@ def plot_spectrogram(ax, wav, title, sr=SR, vmin=-80, vmax=0):
         np.lib.stride_tricks.sliding_window_view(
             np.pad(wav, (n_fft // 2, n_fft // 2)),
             n_fft
-        ) * np.hanning(n_fft),
+        )[::hop] * np.hanning(n_fft),
         axis=-1
     )) ** 2
     S_db = 10 * np.log10(np.maximum(S.T, 1e-10))
@@ -72,7 +72,7 @@ def plot_difference(ax, wav1, wav2, title, sr=SR):
             np.lib.stride_tricks.sliding_window_view(
                 np.pad(w, (n_fft // 2, n_fft // 2)),
                 n_fft
-            ) * np.hanning(n_fft),
+            )[::hop] * np.hanning(n_fft),
             axis=-1
         )) ** 2
         return 10 * np.log10(np.maximum(S.T, 1e-10))
@@ -202,7 +202,7 @@ def main():
                 S = np.abs(np.fft.rfft(
                     np.lib.stride_tricks.sliding_window_view(
                         np.pad(wav, (n_fft // 2, n_fft // 2)), n_fft
-                    ) * np.hanning(n_fft), axis=-1
+                    )[::160] * np.hanning(n_fft), axis=-1
                 )) ** 2
                 freqs = np.arange(S.shape[1]) * SR / n_fft
                 return freqs, S.mean(axis=0)
