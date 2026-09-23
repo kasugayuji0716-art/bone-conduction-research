@@ -35,6 +35,7 @@ function cell(text, { width, shade, bold, align } = {}) {
     children: [new Paragraph({
       alignment: align || AlignmentType.LEFT,
       spacing: { after: 0, line: 240 },
+      keepNext: true, keepLines: true,   // 表を分割せず、直後のキャプションと同じ段に置く
       children: [bold ? txtB(text, { size: 17 }) : txt(text, { size: 17 })]
     })]
   });
@@ -51,7 +52,7 @@ function tbl(hdrs, rows, ws) {
   });
 }
 
-const cap = (t) => p([txt(t, { size: 17, italics: true })], { alignment: AlignmentType.CENTER, spacing: { before: 30, after: 140 } });
+const cap = (t) => p([txt(t, { size: 17, italics: true })], { alignment: AlignmentType.CENTER, keepLines: true, spacing: { before: 30, after: 140 } });
 
 // ══════════════════════════════════════════════════════════════
 // CONTENT
