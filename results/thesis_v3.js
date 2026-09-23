@@ -163,7 +163,7 @@ const content = [
   // ────────────────────────────────────────────────
   h1("5. 考察"),
   p([txt("以上の結果は、CE損失で学習したSEが、学習に用いた認識器に向けて入力を調整する「波形領域のアダプタ」として働くことを示唆する。その効果はWhisper系列内には持ち越されるが、系列外の認識器では失われ、むしろ悪化する。一方、気導音声の表現に近づけるEnc L1は認識器を選ばない代わりに改善も小さい。ASR損失によるSEの学習には、対象の認識器への特化と汎用性のトレードオフが存在する。自己教師あり表現空間の距離を損失として学習したSEが複数の下流タスクで有効であるという報告[8]と合わせると、汎化の範囲は損失の種類に依存すると考えられる。")]),
-  p([txt("また、未正規化のCERでは句読点出力の抑制が改善として計上された。ASR損失で学習したSEの評価では、テキストの正規化と、学習に用いていない系列の認識器による評価が必要である。")]),
+  p([txt("また、未正規化のCERでは句読点出力の抑制が改善として計上された。de Oliveiraら[12]も、ASRによるSEの評価結果が認識器の選択とテキスト正規化の方法に大きく依存することを指摘している。ASR損失で学習したSEの評価では、テキストの正規化と、学習に用いていない系列の認識器による評価が特に重要である。")]),
   p([txt("本研究の限界として、各条件の学習が1回であること、"), mi("λ"), txt("の探索範囲が10までであること、韓国語のみの評価であることが挙げられる。")]),
 
   // ────────────────────────────────────────────────
@@ -183,6 +183,7 @@ const content = [
   ref("[9] V. Pratap, et al., “Scaling Speech Technology to 1,000+ Languages,” JMLR, vol. 25, 2024."),
   ref("[10] A. Babu, et al., “XLS-R: Self-supervised Cross-lingual Speech Representation Learning at Scale,” Proc. Interspeech, 2022."),
   ref("[11] A. Radford, et al., “Robust Speech Recognition via Large-Scale Weak Supervision,” Proc. ICML, 2023."),
+  ref("[12] D. de Oliveira, T. Peer, and T. Gerkmann, “Too Good to Be True: A Study on Modern Automatic Speech Recognition for the Evaluation of Speech Enhancement,” arXiv:2605.12107, 2026."),
 ];
 
 // ══════════════════════════════════════════════════════════════
