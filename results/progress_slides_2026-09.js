@@ -32,7 +32,7 @@ const rich = (parts, base = {}) => parts.map(p => typeof p === "string" ? { text
   title(s, "問いと手法");
   const lx = M, lw = 6.3;
   T(s, "背景", { x: lx, y: 1.75, w: lw, h: 0.35, fontSize: 15, bold: true, color: C.orange });
-  T(s, rich(["喉マイクは騒音に強いが、4 kHz以上がなくASR精度が低い。対策は、ASR自体を学習し直す", { b: "FT" }, "か、前処理で音を直す", { b: "SE" }, "。精度はFTが上だが、SEは", { b: "どのASRにもつなげられる" }, "のが利点。"]),
+  T(s, rich(["喉マイクは騒音に強いが、4 kHz以上がなくASR精度が低い。対策は、ASR自体を学習し直す", { b: "FT" }, "か、前処理で音を直す", { b: "SE" }, "。精度はFTが上。SEは", { b: "どのASRにもつなげられる" }, "のが利点"]),
     { x: lx, y: 2.15, w: lw, h: 1.4, fontSize: 16, lineSpacingMultiple: 1.4 });
   T(s, "問い", { x: lx, y: 4.0, w: lw, h: 0.35, fontSize: 15, bold: true, color: C.orange });
   T(s, "ASR損失で学習したSEの改善は、\n別のASRにも通用するか？", { x: lx, y: 4.4, w: lw, h: 1.3, fontSize: 20, bold: true, lineSpacingMultiple: 1.3 });
