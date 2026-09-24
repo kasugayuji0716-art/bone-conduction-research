@@ -554,7 +554,7 @@ KD損失はCE損失の約1/50と極めて小さく、実質的にAdapterのみ�
 **現状の評価（2026-09-24）**
 - CE-SEを「提案手法」として押すのは行き詰まり: 凍結Whisper損失で前処理を学習する先行研究あり（Dissen et al., Interspeech 2024）、精度でFTに劣る、SEの長所（ASR非依存）を失う
 - 卒論は分析としてまとめる（results/thesis_v3.*、案A「ASR損失で学習した喉マイク音声強調の効果と汎化範囲」、4ページ）
-- 修士の本命: 重みを変えられないASR（クラウドAPI・共用ASR）向けの、ASRに依存しない喉マイクSE。Enc L1／SSL表現系の損失が手がかり
+- 修士の本命: 重みを変えられないASR（クラウドAPI・共用ASR）向けの、ASRに依存しない喉マイクSE。SSL表現系の損失（Sato 2025等）が手がかり。Enc L1はTAPSからほぼ変化せず手がかりとしては弱い
 - 評価の原則: テキスト正規化（句読点除去）必須、学習に使っていない系列のASRで評価、話者単位の検定、hypを必ず保存（scripts 62/64形式）
 
 → 詳細: results/RESULTS_SUMMARY.md, memory/thesis-robustness-status.md
