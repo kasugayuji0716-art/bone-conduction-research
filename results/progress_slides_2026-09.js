@@ -1,5 +1,6 @@
 // ゼミ進捗報告（2026-09）スライド → progress_slides_2026-09.pptx
 // Artifact版 https://claude.ai/artifact/UWmWDDKcFj3q7hhBnQuDSd と同内容
+// ⚠️ 2026-09-24 以降、pptx は PowerPoint で手動編集済み（7枚）。このスクリプトを再実行すると手動編集が上書きされる
 const pptxgen = require("pptxgenjs");
 const pptx = new pptxgen();
 pptx.layout = "LAYOUT_WIDE"; // 13.333 x 7.5 in
