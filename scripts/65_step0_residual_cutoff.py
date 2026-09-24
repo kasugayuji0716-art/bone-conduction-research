@@ -25,6 +25,10 @@ CER は句読点除去後（script 63 の norm/capped）を主、raw も保存�
     python scripts/65_step0_residual_cutoff.py gen
     python scripts/65_step0_residual_cutoff.py asr --asr whisper-small [--limit 5]
     python scripts/65_step0_residual_cutoff.py summary
+    # α を dev で選ぶための追加実行（残差スイープの7条件だけ）
+    python scripts/65_step0_residual_cutoff.py gen --split dev
+    python scripts/65_step0_residual_cutoff.py asr --asr xlsr-korean --split dev --conds mix
+    python scripts/65_step0_residual_cutoff.py summary --split dev
 """
 
 import argparse, csv, sys, time
@@ -81,9 +85,14 @@ def make_conds(taps, ce):
 
 
 # ---------------- gen ----------------
-def gen(limit):
+def hyp_path(name, split, limit=0):
+    tag = '' if split == 'test' else f'_{split}'
+    return OUT / f'hyp_{name}{tag}{"_trial" if limit else ""}.csv'
+
+
+def gen(limit, split):
     CACHE.mkdir(parents=True, exist_ok=True)
-    samples = s64.load_samples('test')[:limit or None]
+    samples = s64.load_samples(split)[:limit or None]
     se_taps = s64.load_se(s64.SE_CKPTS['taps'])
     se_ce = s64.load_se(s64.SE_CKPTS['ce10.0'])
     t0 = time.time()
@@ -121,13 +130,13 @@ def load_asr(name):
     return lambda wav: s62.ctc_transcribe(proc, model, wav)
 
 
-def asr(name, limit):
+def asr(name, limit, split, conds_all):
     OUT.mkdir(parents=True, exist_ok=True)
-    out_path = OUT / (f'hyp_{name}.csv' if not limit else f'hyp_{name}_trial.csv')
+    out_path = hyp_path(name, split, limit)
     done = set()
     if out_path.exists() and not limit:
         done = {(r['utt'], r['cond']) for r in csv.DictReader(open(out_path, encoding='utf-8'))}
-    samples = s64.load_samples('test')[:limit or None]
+    samples = s64.load_samples(split)[:limit or None]
     run = load_asr(name)
     new = not out_path.exists() or limit
     f = open(out_path, 'w' if limit else 'a', newline='', encoding='utf-8')
@@ -135,10 +144,10 @@ def asr(name, limit):
     if new:
         w.writeheader()
     t0, n = time.time(), 0
-    todo = sum(1 for s in samples for c in CONDS if (s['utt'], c) not in done)
+    todo = sum(1 for s in samples for c in conds_all if (s['utt'], c) not in done)
     print(f'{name}: {todo} jobs', flush=True)
     for i, s in enumerate(samples):
-        conds = [c for c in CONDS if (s['utt'], c) not in done]
+        conds = [c for c in conds_all if (s['utt'], c) not in done]
         if not conds:
             continue
         z = np.load(CACHE / f"{s['utt']}.npz")
@@ -166,11 +175,12 @@ def spk_means(d):
     return spk, np.array([np.mean(by[k]) for k in spk])
 
 
-def summary():
-    refs = {s['utt']: s['text'] for s in s64.load_samples('test')}
+def summary(split='test'):
+    refs = {s['utt']: s['text'] for s in s64.load_samples(split)}
+    tag = '' if split == 'test' else f'_{split}'
     sc = {}   # (asr, cond) -> {(utt, spk): (nopunct, raw)}
     for name in ASRS:
-        p = OUT / f'hyp_{name}.csv'
+        p = hyp_path(name, split)
         if not p.exists():
             continue
         for r in csv.DictReader(open(p, encoding='utf-8')):
@@ -183,7 +193,7 @@ def summary():
         v = np.array(list(d.values()))
         rows.append(dict(asr=name, cond=cond, n=len(d), cer_nopunct=round(v[:, 0].mean(), 4),
                          cer_raw=round(v[:, 1].mean(), 4)))
-    with open(OUT / 'summary.csv', 'w', newline='', encoding='utf-8') as f:
+    with open(OUT / f'summary{tag}.csv', 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
 
     def cmp(name, a, b):
@@ -206,7 +216,7 @@ def summary():
         pairs += [cmp(name, 'mix0.00', 'taps_notch'), cmp(name, 'mix1.00', 'ce_notch'),
                   cmp(name, 'mix0.00', 'hyb_tapsLow_ceHigh'), cmp(name, 'mix0.00', 'hyb_ceLow_tapsHigh')]
     pairs = [p for p in pairs if p]
-    with open(OUT / 'pairs.csv', 'w', newline='', encoding='utf-8') as f:
+    with open(OUT / f'pairs{tag}.csv', 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=list(pairs[0])); w.writeheader(); w.writerows(pairs)
 
     # 表示: 残差スイープ（相対変化 vs TAPS）とカットオフ行列
@@ -226,7 +236,7 @@ def summary():
             ys = [cer.get((a, f'{src}_lpf{fc // 1000}k')) for fc in CUTOFFS] + [cer.get((a, full)),
                                                                                  cer.get((a, f'{src}_notch'))]
             print(f'       {a:<15}' + ''.join(f'{y:>8.4f}' if y is not None else f'{"-":>8}' for y in ys))
-    print(f'\nSaved: {OUT / "summary.csv"}, {OUT / "pairs.csv"}')
+    print(f'\nSaved: {OUT / f"summary{tag}.csv"}, {OUT / f"pairs{tag}.csv"}')
 
 
 def main():
@@ -234,15 +244,18 @@ def main():
     ap.add_argument('stage', choices=['gen', 'asr', 'summary'])
     ap.add_argument('--asr', choices=ASRS)
     ap.add_argument('--limit', type=int, default=0)
+    ap.add_argument('--split', choices=['test', 'dev'], default='test')
+    ap.add_argument('--conds', choices=['all', 'mix'], default='all',
+                    help='mix: 残差スイープの7条件だけ（dev での α 選択用）')
     a = ap.parse_args()
     if a.stage == 'gen':
-        gen(a.limit)
+        gen(a.limit, a.split)
     elif a.stage == 'asr':
         if not a.asr:
             ap.error('--asr が必要')
-        asr(a.asr, a.limit)
+        asr(a.asr, a.limit, a.split, MIX if a.conds == 'mix' else CONDS)
     else:
-        summary()
+        summary(a.split)
 
 
 if __name__ == '__main__':
