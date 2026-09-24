@@ -413,7 +413,7 @@ KD損失はCE損失の約1/50と極めて小さく、実質的にAdapterのみ�
 - GitHubリポジトリ: `https://github.com/kasugayuji0716-art/bone-conduction-research`
 - `gtcrn/` はサブモジュール → クローン時は `git clone --recurse-submodules <URL>`
 - `.gitignore` で除外済み: `data/raw/throat・acoustic/`・`data/processed/`・`venv/`
-- DNN PC（dl-box3, ~/kasuga/）にクローン・環境構築済み
+- GPU PC（RTX PRO 6000、WSL Ubuntu-24.04、`~/kasuga/`）にクローン・環境構築済み（詳細は「環境メモ」）
 
 ---
 
@@ -445,9 +445,21 @@ KD損失はCE損失の約1/50と極めて小さく、実質的にAdapterのみ�
 ## 環境メモ
 
 - **macOS（開発・執筆用）**: Python 3.13
-- **DNN PC (dl-box3, Linux)**: TITAN RTX × 2（各24GB VRAM）、CUDA 13.1
-- `pip install faster-whisper jiwer soundfile scipy pystoi einops pesq python-pptx python-docx`
-- `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`（DNN PC）
+- **GPU PC（2026-09-24〜、現行）**: NVIDIA RTX PRO 6000 Blackwell Max-Q（96GB、sm_120）、研究室の**共用Windows PC**上のWSL2
+  - 自分専用ディストリ **Ubuntu-24.04**（Python 3.12）。既定ディストリ（Ubuntu-22.04）とWindows側の設定は他の人のものなので触らない
+  - リポジトリ: `~/kasuga/bone-conduction-research`、venvは同ディレクトリの `venv/`
+  - 仮想ディスクはFドライブに配置（Cドライブは空きが少ない）。データはWSL内（`~/`）に置き、`/mnt/c` 以下には置かない
+  - Macからの接続: `ssh labgpu`（研究室Wi-Fi内）/ `ssh labgpu-ts`（Tailscale経由、学外から）。設定はMacの `~/.ssh/config`。鍵認証のみ
+  - WSLはウィンドウを全部閉じると止まる → Ubuntu-24.04のウィンドウを開いたままにする。止まったらリモートデスクトップで `wsl -d Ubuntu-24.04`
+  - sudoはパスワード入力が必要（Claudeからは実行できない）
+  - 長時間の処理は必ずtmuxの中で実行する
+- **旧DNN PC**: dl-box3（TITAN RTX × 2）、DL-Box5（RTX 4500 Ada、WSL）。DL-Box5のcheckpoints・TAPS公式重み・results・logsは2026-09-24に新GPU PCへ転送（VibraVoxとdata/processedはDL-Box5になく、必要なら再生成）。以後は使わない
+- `pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128`（**Blackwellはcu128以上が必須**、cu121では動かない）
+- `pip install faster-whisper jiwer soundfile librosa scipy pystoi einops pesq transformers accelerate peft "datasets<4" python-pptx python-docx`
+  - librosaはdatasetsで音声をデコードするときに必要
+- **faster-whisper（CTranslate2）がGPUで `libcublas.so.12 is not found` になる場合**: pipで入るcuBLAS/cuDNNを見つけられていない。venvの `bin/activate` の末尾で `LD_LIBRARY_PATH` に `venv/lib/python3.12/site-packages/nvidia/{cublas,cudnn}/lib` を追加する（GPU PCでは設定済み。venvを作り直したら再設定）
+- CT2モデルの実体は `~/models/` に置き、スクリプトが参照する `/tmp/whisper-small-ct2`・`/tmp/whisper_small_ct2`・`/tmp/whisper_ft_ct2` へシンボリックリンクを貼る（`/tmp` はWSL再起動で消えるため、GPU PCでは `~/.bashrc` から `~/link_models.sh` を呼んで毎回貼り直している）
+- 移行確認（2026-09-24、GPU PC）: whisper-small × test × No SE の句読点除去後CER = 0.4467（確定値0.446と一致）
 - datasets は `<4.0`（3.x系）を使用 — 4.x系はtorchcodecが必要で動作しない
 - GTCRNはPyTorch `return_complex=True` API（旧APIは廃止済み）
 - pesqはPython3.13でコンパイルに `sudo xcodebuild -license accept` が必要（macOS）
