@@ -10,6 +10,9 @@
   これまで λ 違いは whisper-small（学習に使った認識器）でしか評価していなかった。
 
 条件: taps, ce0.0 … ce10.0（script 64 の SE_CKPTS と同じチェックポイント）
+  --set avg: 2つのSE出力の平均（対照実験）。script 65 の「α=0.5 で非Whisper系も改善」が
+  CE の変化の方向によるものか、単に異なる2モデルの出力を平均した効果（アンサンブル）かを切り分ける。
+  avg_taps_ce0.0 は CE 損失なし（λ=0）で追加学習したモデルとの平均。これでも改善するなら平均の効果
 認識器: script 65 と同じ 6 つ（whisper-base/small/medium/ft, mms-1b-all, xlsr-korean）
 CER は句読点除去後（script 63 の norm/capped）。検定は話者単位（n=10）。
 
@@ -42,6 +45,9 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 OUT = BASE_DIR / 'results' / 'lambda_asr'
 LAMBDAS = ['0.0', '0.1', '0.5', '1.0', '2.0', '5.0', '10.0']
 CONDS = ['taps'] + [f'ce{l}' for l in LAMBDAS]
+AVGS = {'avg_taps_ce0.0': ('taps', 'ce0.0'), 'avg_taps_ce10.0': ('taps', 'ce10.0'),
+        'avg_ce0.0_ce10.0': ('ce0.0', 'ce10.0')}
+ALL_CONDS = CONDS + list(AVGS)
 ASRS = s65.ASRS
 
 
@@ -50,34 +56,42 @@ def hyp_path(name, split, limit=0):
     return OUT / f'hyp_{name}{tag}{"_trial" if limit else ""}.csv'
 
 
-def asr(name, split, limit):
+def asr(name, split, limit, conds_all=CONDS):
     OUT.mkdir(parents=True, exist_ok=True)
     out_path = hyp_path(name, split, limit)
     done = set()
     if out_path.exists() and not limit:
         done = {(r['utt'], r['cond']) for r in csv.DictReader(open(out_path, encoding='utf-8'))}
     samples = s64.load_samples(split)[:limit or None]
-    se = {c: s64.load_se(s64.SE_CKPTS[c]) for c in CONDS}
+    need = sorted({m for c in conds_all for m in AVGS.get(c, (c,))})
+    se = {c: s64.load_se(s64.SE_CKPTS[c]) for c in need}
     run = s65.load_asr(name)
     new = not out_path.exists() or limit
     f = open(out_path, 'w' if limit else 'a', newline='', encoding='utf-8')
     w = csv.DictWriter(f, fieldnames=['utt', 'spk', 'cond', 'hyp'])
     if new:
         w.writeheader()
-    todo = sum(1 for s in samples for c in CONDS if (s['utt'], c) not in done)
+    todo = sum(1 for s in samples for c in conds_all if (s['utt'], c) not in done)
     print(f'{name} / {split}: {todo} jobs', flush=True)
     t0, n = time.time(), 0
     for i, s in enumerate(samples):
-        conds = [c for c in CONDS if (s['utt'], c) not in done]
+        conds = [c for c in conds_all if (s['utt'], c) not in done]
         if not conds:
             continue
         wav, _ = sf.read(s['path'], dtype='float32')
         if wav.ndim > 1:
             wav = wav.mean(axis=1)
         x = torch.from_numpy(wav).unsqueeze(0).to(DEVICE)
+        with torch.no_grad():
+            outs = {m: se[m](x).squeeze().cpu().numpy().astype(np.float32)
+                    for m in need if any(m in AVGS.get(c, (c,)) for c in conds)}
         for c in conds:
-            with torch.no_grad():
-                audio = se[c](x).squeeze().cpu().numpy().astype(np.float32)
+            if c in AVGS:
+                a, b = (outs[m] for m in AVGS[c])
+                n_ = min(len(a), len(b))
+                audio = (0.5 * (a[:n_] + b[:n_])).astype(np.float32)
+            else:
+                audio = outs[c]
             hyp = run(audio)
             w.writerow(dict(utt=s['utt'], spk=s['spk'], cond=c, hyp=hyp))
             n += 1
@@ -112,12 +126,12 @@ def summary(split):
 
     rows, pairs = [], []
     for name in ASRS:
-        for c in CONDS:
+        for c in ALL_CONDS:
             d = sc.get((name, c))
             if d:
                 rows.append(dict(asr=name, cond=c, n=len(d), cer_nopunct=round(np.mean(list(d.values())), 4)))
         base = sc.get((name, 'taps'))
-        for c in CONDS[1:]:
+        for c in ALL_CONDS[1:]:
             d = sc.get((name, c))
             if not base or not d or len(d) != len(base):
                 continue
@@ -144,6 +158,13 @@ def summary(split):
         ce_ys = ys[1:]
         rho = spearmanr([float(l) for l in LAMBDAS], ce_ys).statistic if None not in ce_ys else float('nan')
         print(f'{name:<15}' + ''.join(f'{y:>8.4f}' if y is not None else f'{"-":>8}' for y in ys) + f'{rho:>10.2f}')
+    print(f'\n2つのSE出力の平均（対照）  CER  （括弧内は TAPS 比）')
+    for name in ASRS:
+        t = cer.get((name, 'taps'))
+        items = [(c, cer.get((name, c))) for c in AVGS]
+        if t is None or all(v is None for _, v in items):
+            continue
+        print(f'{name:<15}' + ''.join(f'  {c}={v:.4f}({100 * (v / t - 1):+.1f}%)' for c, v in items if v is not None))
     print(f'\nSaved: {OUT}/summary{tag}.csv, pairs{tag}.csv')
 
 
@@ -153,11 +174,12 @@ def main():
     ap.add_argument('--asr', choices=ASRS)
     ap.add_argument('--split', choices=['test', 'dev'], default='test')
     ap.add_argument('--limit', type=int, default=0)
+    ap.add_argument('--set', choices=['lambda', 'avg'], default='lambda')
     a = ap.parse_args()
     if a.stage == 'asr':
         if not a.asr:
             ap.error('--asr が必要')
-        asr(a.asr, a.split, a.limit)
+        asr(a.asr, a.split, a.limit, CONDS if a.set == 'lambda' else ['taps'] + list(AVGS))
     else:
         summary(a.split)
 
