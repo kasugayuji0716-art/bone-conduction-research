@@ -16,6 +16,8 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # ── テスト音声を1つ読む ──
 test_dir = BASE_DIR / 'data' / 'raw' / 'taps' / 'throat' / 'test'
+if not test_dir.exists():
+    test_dir = BASE_DIR / 'data' / 'raw' / 'taps' / 'throat'  # Mac用
 wav_path = sorted(test_dir.glob('*.wav'))[0]
 wav, sr = sf.read(wav_path, dtype='float32')
 
@@ -41,80 +43,70 @@ print(f'\n{"="*60}')
 print(f'--- STEP 1: SE-Conformer ---')
 print(f'入力 → encoder → conformer → decoder → 出力')
 
-from models.seconformer import seconformer
-from models.demucs import upsample2, downsample2
+try:
+    from models.seconformer import seconformer
+    from models.demucs import upsample2, downsample2
 
-se = seconformer(hidden=64, conformer_dim=512, conformer_ffn_dim=64,
-                 conformer_depth=4, depthwise_conv_kernel_size=15)
-state = torch.load(BASE_DIR / 'taps-baselines' / 'pretrained' / 'seconformer.th',
-                   map_location='cpu', weights_only=False)
-if 'model' in state: state = state['model']
-se.load_state_dict(state)
-se.eval()
+    se = seconformer(hidden=64, conformer_dim=512, conformer_ffn_dim=64,
+                     conformer_depth=4, depthwise_conv_kernel_size=15)
+    ckpt = BASE_DIR / 'taps-baselines' / 'pretrained' / 'seconformer.th'
+    state = torch.load(ckpt, map_location='cpu', weights_only=False)
+    if 'model' in state: state = state['model']
+    se.load_state_dict(state)
+    se.eval()
 
-# SE内部を手動でトレース
-x = torch.from_numpy(wav).unsqueeze(0)  # (1, T)
-print(f'\n[入力] shape: {tuple(x.shape)} → (batch=1, time={x.shape[1]})')
+    # SE内部を手動でトレース
+    x = torch.from_numpy(wav).unsqueeze(0)
+    print(f'\n[入力] shape: {tuple(x.shape)} → (batch=1, time={x.shape[1]})')
+    x = x.unsqueeze(1)
+    print(f'[unsqueeze] shape: {tuple(x.shape)} → (batch, channels=1, time)')
 
-x = x.unsqueeze(1)  # (1, 1, T)
-print(f'[unsqueeze] shape: {tuple(x.shape)} → (batch, channels=1, time)')
+    mono = x.mean(dim=1, keepdim=True)
+    std = mono.std(dim=-1, keepdim=True)
+    x_norm = x / (1e-3 + std)
+    print(f'[正規化] std={std.item():.4f}, 正規化後 range: [{x_norm.min():.2f}, {x_norm.max():.2f}]')
 
-# 正規化
-mono = x.mean(dim=1, keepdim=True)
-std = mono.std(dim=-1, keepdim=True)
-x_norm = x / (1e-3 + std)
-print(f'[正規化] std={std.item():.4f}, 正規化後 range: [{x_norm.min():.2f}, {x_norm.max():.2f}]')
+    length = x_norm.shape[-1]
+    valid_len = se.valid_length(length)
+    x_pad = torch.nn.functional.pad(x_norm, (0, valid_len - length))
+    print(f'[padding] {length} → {valid_len} samples (+ {valid_len - length} padding)')
 
-# valid_length & padding
-length = x_norm.shape[-1]
-valid_len = se.valid_length(length)
-x_pad = torch.nn.functional.pad(x_norm, (0, valid_len - length))
-print(f'[padding] {length} → {valid_len} samples (+ {valid_len - length} padding)')
+    x_up = upsample2(upsample2(x_pad))
+    print(f'[upsample ×4] shape: {tuple(x_up.shape)} → 時間が4倍')
 
-# upsample
-x_up = upsample2(upsample2(x_pad))
-print(f'[upsample ×4] shape: {tuple(x_up.shape)} → 時間が4倍: {x_pad.shape[-1]} → {x_up.shape[-1]}')
+    print(f'\n[Encoder: Conv1d × 4層]')
+    skips = []
+    h = x_up
+    for i, enc in enumerate(se.encoder):
+        h = enc(h); skips.append(h)
+        print(f'  層{i}: shape {tuple(h.shape)} → channels={h.shape[1]}, time={h.shape[2]}')
 
-# encoder
-print(f'\n[Encoder: Conv1d × 4層]')
-skips = []
-h = x_up
-for i, enc in enumerate(se.encoder):
-    h = enc(h)
-    skips.append(h)
-    print(f'  層{i}: shape {tuple(h.shape)} → channels={h.shape[1]}, time={h.shape[2]}')
+    print(f'\n[Conformer blocks × {len(se.conformers)}]')
+    h = h.permute(2, 0, 1)
+    print(f'  permute: → {tuple(h.shape)} (time, batch, channels)')
+    for i, conf in enumerate(se.conformers):
+        h = conf(h, None)
+        print(f'  block {i}: shape {tuple(h.shape)}')
+    h = h.permute(1, 2, 0)
+    print(f'  permute戻し: {tuple(h.shape)}')
 
-# conformer
-print(f'\n[Conformer blocks × {len(se.conformers)}]')
-print(f'  入力: {tuple(h.shape)} → permute → ', end='')
-h = h.permute(2, 0, 1)  # (T', B, C)
-print(f'{tuple(h.shape)} (time, batch, channels={h.shape[2]})')
-for i, conf in enumerate(se.conformers):
-    h = conf(h, None)
-    print(f'  block {i}: shape {tuple(h.shape)} (変わらない)')
-h = h.permute(1, 2, 0)  # (B, C, T')
-print(f'  permute戻し: {tuple(h.shape)}')
+    print(f'\n[Decoder: ConvTranspose1d × 4層 + skip接続]')
+    for i, dec in enumerate(se.decoder):
+        skip = skips.pop(-1)
+        h = h + skip[..., :h.shape[-1]]
+        h = dec(h)
+        print(f'  層{i}: + skip → shape {tuple(h.shape)}')
 
-# decoder
-print(f'\n[Decoder: ConvTranspose1d × 4層 + skip接続]')
-for i, dec in enumerate(se.decoder):
-    skip = skips.pop(-1)
-    h = h + skip[..., :h.shape[-1]]
-    print(f'  層{i}: + skip → ', end='')
-    h = dec(h)
-    print(f'shape {tuple(h.shape)} → channels={h.shape[1]}, time={h.shape[2]}')
+    h = downsample2(downsample2(h))
+    h = h[..., :length]
+    se_output = (std * h).squeeze()
+    print(f'[downsample + trim + 逆正規化] → shape: {tuple(se_output.shape)}')
+    print(f'  出力 range: [{se_output.min():.4f}, {se_output.max():.4f}]')
+    se_np = se_output.detach().numpy()
 
-# downsample
-h = downsample2(downsample2(h))
-print(f'[downsample ×4] shape: {tuple(h.shape)} → time: {h.shape[-1]}')
-
-h = h[..., :length]
-print(f'[trim] shape: {tuple(h.shape)} → 元の長さに戻す')
-
-se_output = (std * h).squeeze()
-print(f'[逆正規化] × std → shape: {tuple(se_output.shape)}')
-print(f'  出力 range: [{se_output.min():.4f}, {se_output.max():.4f}]')
-print(f'  出力 mean: {se_output.mean():.4f}, std: {se_output.std():.4f}')
+except FileNotFoundError:
+    print('(SEチェックポイントなし → 生音声をそのまま使用)')
+    se_np = wav
 
 # ==============================
 # STEP 2: Whisper Feature Extractor (log-mel)
@@ -126,7 +118,6 @@ print(f'音声波形 → STFT → メル周波数変換 → 対数 → 正規化
 from transformers import WhisperFeatureExtractor
 feat_ext = WhisperFeatureExtractor.from_pretrained('openai/whisper-small')
 
-se_np = se_output.detach().numpy()
 inputs = feat_ext(se_np, sampling_rate=16000, return_tensors='pt',
                   padding='max_length', max_length=480000)
 mel = inputs.input_features  # (1, 80, 3000)
@@ -144,12 +135,12 @@ print(f'\n{"="*60}')
 print(f'--- STEP 3: Whisper Encoder ---')
 print(f'log-mel → Conv1d×2 → Transformer × 12層 → encoder出力')
 
-from transformers import WhisperModel
-whisper = WhisperModel.from_pretrained('openai/whisper-small')
+from transformers import WhisperForConditionalGeneration
+whisper = WhisperForConditionalGeneration.from_pretrained('openai/whisper-small')
 whisper.eval()
 
 with torch.no_grad():
-    encoder_out = whisper.encoder(mel)
+    encoder_out = whisper.model.encoder(mel)
 
 hidden = encoder_out.last_hidden_state
 print(f'入力: {tuple(mel.shape)} (batch, mel_bins=80, frames=3000)')
@@ -178,7 +169,7 @@ decoder_input = torch.tensor([[50258, 50264, 50359, 50363]])  # Whisper韓国語
 with torch.no_grad():
     out = whisper(encoder_outputs=(hidden,), decoder_input_ids=decoder_input)
 
-logits = out.logits
+logits = out.logits  # WhisperForConditionalGenerationはlogitsを持つ
 print(f'decoder入力: {tuple(decoder_input.shape)} → 4つの特殊トークン')
 print(f'decoder出力 (logits): {tuple(logits.shape)}')
 print(f'  → batch=1, steps=4, vocab_size={logits.shape[-1]}')

@@ -118,7 +118,7 @@ def asr(name, split, limit):
             wav = wav.mean(axis=1)
         x = torch.from_numpy(wav).unsqueeze(0).to(DEVICE)
         with torch.no_grad():
-            outs = {k: m(x).squeeze(0) for k, m in se.items()}
+            outs = {k: m(x).reshape(-1) for k, m in se.items()}   # SE ごとに出力の次元が違うので1次元に揃える
             n = min(v.shape[-1] for v in outs.values())
             audio = fuse_all({k: v[:n] for k, v in outs.items()})
         for c in conds:
