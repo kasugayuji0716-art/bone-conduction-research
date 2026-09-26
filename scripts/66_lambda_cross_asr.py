@@ -16,6 +16,8 @@
   --set div: 多様性の対照。ASR損失を使わない別構造のSE（TAPS 公開の Demucs、TSTNN。公式実装）と TAPS の平均。
   TAPS+CE10 の平均が TAPS+CE0 より良かったのが「CE の変化の中身」によるのか「相手が TAPS から遠い
   （多様性が大きい）」だけなのかを切り分ける
+  mavg_*: 振幅スペクトルだけを平均し位相は TAPS のものを使う平均（STFT 512/128, Hann）。Demucs/TSTNN は
+  TAPS と位相が大きく異なり（差分SNR < 0 dB）、波形の平均では打ち消し合いが起きるため、位相に依らない平均も併記する
   dist: TAPS と各SE出力の違いの大きさ（log-mel L1、TAPS に対する差分のSNR）を測る
 認識器: script 65 と同じ 6 つ（whisper-base/small/medium/ft, mms-1b-all, xlsr-korean）
 CER は句読点除去後（script 63 の norm/capped）。検定は話者単位（n=10）。
@@ -55,11 +57,24 @@ OTHER_SE = ['demucs', 'tstnn']
 AVGS = {'avg_taps_ce0.0': ('taps', 'ce0.0'), 'avg_taps_ce10.0': ('taps', 'ce10.0'),
         'avg_ce0.0_ce10.0': ('ce0.0', 'ce10.0'),
         'avg_taps_demucs': ('taps', 'demucs'), 'avg_taps_tstnn': ('taps', 'tstnn')}
+MAVGS = {f'mavg_taps_{p}': ('taps', p) for p in ['ce0.0', 'ce10.0', 'demucs', 'tstnn']}
+AVGS.update(MAVGS)
 ALL_CONDS = CONDS + OTHER_SE + list(AVGS)
 SETS = {'lambda': CONDS,
         'avg': ['taps', 'avg_taps_ce0.0', 'avg_taps_ce10.0', 'avg_ce0.0_ce10.0'],
         'div': ['taps', 'demucs', 'tstnn', 'avg_taps_demucs', 'avg_taps_tstnn',
-                'avg_taps_ce0.0', 'avg_taps_ce10.0']}
+                'avg_taps_ce0.0', 'avg_taps_ce10.0'] + list(MAVGS)}
+
+_WIN = torch.hann_window(512)
+
+
+def mag_avg(ref, other):
+    """振幅スペクトルを平均し、位相は ref のものを使って波形に戻す"""
+    r, o = torch.from_numpy(ref), torch.from_numpy(other)
+    R = torch.stft(r, 512, 128, window=_WIN, return_complex=True)
+    O = torch.stft(o, 512, 128, window=_WIN, return_complex=True)
+    Y = 0.5 * (R.abs() + O.abs()) * torch.exp(1j * R.angle())
+    return torch.istft(Y, 512, 128, window=_WIN, length=len(ref)).numpy().astype(np.float32)
 
 
 def load_any_se(name):
@@ -119,7 +134,8 @@ def asr(name, split, limit, conds_all=CONDS):
             if c in AVGS:
                 a, b = (outs[m] for m in AVGS[c])
                 n_ = min(len(a), len(b))
-                audio = (0.5 * (a[:n_] + b[:n_])).astype(np.float32)
+                audio = (mag_avg(a[:n_], b[:n_]) if c in MAVGS
+                         else (0.5 * (a[:n_] + b[:n_])).astype(np.float32))
             else:
                 audio = outs[c]
             hyp = run(audio)
