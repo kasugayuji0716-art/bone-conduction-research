@@ -1,0 +1,6 @@
+
+TAPS との違い（test, 1000発話の平均）
+  ce0.0    log-mel L1=0.3133  差分SNR=11.16 dB
+  ce10.0   log-mel L1=0.7290  差分SNR=4.49 dB
+  demucs   log-mel L1=0.4201  差分SNR=-5.18 dB
+  tstnn    log-mel L1=0.4631  差分SNR=-4.91 dB
