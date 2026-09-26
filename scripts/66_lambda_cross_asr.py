@@ -13,6 +13,10 @@
   --set avg: 2つのSE出力の平均（対照実験）。script 65 の「α=0.5 で非Whisper系も改善」が
   CE の変化の方向によるものか、単に異なる2モデルの出力を平均した効果（アンサンブル）かを切り分ける。
   avg_taps_ce0.0 は CE 損失なし（λ=0）で追加学習したモデルとの平均。これでも改善するなら平均の効果
+  --set div: 多様性の対照。ASR損失を使わない別構造のSE（TAPS 公開の Demucs、TSTNN。公式実装）と TAPS の平均。
+  TAPS+CE10 の平均が TAPS+CE0 より良かったのが「CE の変化の中身」によるのか「相手が TAPS から遠い
+  （多様性が大きい）」だけなのかを切り分ける
+  dist: TAPS と各SE出力の違いの大きさ（log-mel L1、TAPS に対する差分のSNR）を測る
 認識器: script 65 と同じ 6 つ（whisper-base/small/medium/ft, mms-1b-all, xlsr-korean）
 CER は句読点除去後（script 63 の norm/capped）。検定は話者単位（n=10）。
 
@@ -23,6 +27,8 @@ CER は句読点除去後（script 63 の norm/capped）。検定は話者単位
 使い方（GPU PC）
     python scripts/66_lambda_cross_asr.py asr --asr xlsr-korean [--split dev] [--limit 3]
     python scripts/66_lambda_cross_asr.py summary [--split dev]
+    python scripts/66_lambda_cross_asr.py asr --asr whisper-small --set div
+    python scripts/66_lambda_cross_asr.py dist
 """
 
 import argparse, csv, sys, time
@@ -45,9 +51,33 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 OUT = BASE_DIR / 'results' / 'lambda_asr'
 LAMBDAS = ['0.0', '0.1', '0.5', '1.0', '2.0', '5.0', '10.0']
 CONDS = ['taps'] + [f'ce{l}' for l in LAMBDAS]
+OTHER_SE = ['demucs', 'tstnn']
 AVGS = {'avg_taps_ce0.0': ('taps', 'ce0.0'), 'avg_taps_ce10.0': ('taps', 'ce10.0'),
-        'avg_ce0.0_ce10.0': ('ce0.0', 'ce10.0')}
-ALL_CONDS = CONDS + list(AVGS)
+        'avg_ce0.0_ce10.0': ('ce0.0', 'ce10.0'),
+        'avg_taps_demucs': ('taps', 'demucs'), 'avg_taps_tstnn': ('taps', 'tstnn')}
+ALL_CONDS = CONDS + OTHER_SE + list(AVGS)
+SETS = {'lambda': CONDS,
+        'avg': ['taps', 'avg_taps_ce0.0', 'avg_taps_ce10.0', 'avg_ce0.0_ce10.0'],
+        'div': ['taps', 'demucs', 'tstnn', 'avg_taps_demucs', 'avg_taps_tstnn',
+                'avg_taps_ce0.0', 'avg_taps_ce10.0']}
+
+
+def load_any_se(name):
+    """(B, T) → (B, T) の SE。TAPS/CE は script 64、Demucs/TSTNN は TAPS 公式実装（taps-baselines/models）"""
+    if name in s64.SE_CKPTS:
+        return s64.load_se(s64.SE_CKPTS[name])
+    pre = BASE_DIR / 'taps-baselines' / 'pretrained'
+    if name == 'demucs':
+        from models.demucs import demucs
+        m = demucs(hidden=64, causal=False, stride=2, resample=2)   # script 37d と同じ設定
+    elif name == 'tstnn':
+        from models.tstnn import tstnn
+        m = tstnn()
+    else:
+        raise ValueError(name)
+    m.load_state_dict(torch.load(pre / f'{name}.th', map_location='cpu', weights_only=False)['model'])
+    m = m.to(DEVICE).eval()
+    return lambda x: m(x.unsqueeze(1)).squeeze(1)       # 公式実装は (B, 1, T) を受け取る
 ASRS = s65.ASRS
 
 
@@ -64,7 +94,7 @@ def asr(name, split, limit, conds_all=CONDS):
         done = {(r['utt'], r['cond']) for r in csv.DictReader(open(out_path, encoding='utf-8'))}
     samples = s64.load_samples(split)[:limit or None]
     need = sorted({m for c in conds_all for m in AVGS.get(c, (c,))})
-    se = {c: s64.load_se(s64.SE_CKPTS[c]) for c in need}
+    se = {c: load_any_se(c) for c in need}
     run = s65.load_asr(name)
     new = not out_path.exists() or limit
     f = open(out_path, 'w' if limit else 'a', newline='', encoding='utf-8')
@@ -158,28 +188,62 @@ def summary(split):
         ce_ys = ys[1:]
         rho = spearmanr([float(l) for l in LAMBDAS], ce_ys).statistic if None not in ce_ys else float('nan')
         print(f'{name:<15}' + ''.join(f'{y:>8.4f}' if y is not None else f'{"-":>8}' for y in ys) + f'{rho:>10.2f}')
-    print(f'\n2つのSE出力の平均（対照）  CER  （括弧内は TAPS 比）')
+    print(f'\n単体SEと2つのSE出力の平均（対照）  CER  （括弧内は TAPS 比）')
     for name in ASRS:
         t = cer.get((name, 'taps'))
-        items = [(c, cer.get((name, c))) for c in AVGS]
+        items = [(c, cer.get((name, c))) for c in OTHER_SE + list(AVGS)]
         if t is None or all(v is None for _, v in items):
             continue
         print(f'{name:<15}' + ''.join(f'  {c}={v:.4f}({100 * (v / t - 1):+.1f}%)' for c, v in items if v is not None))
     print(f'\nSaved: {OUT}/summary{tag}.csv, pairs{tag}.csv')
 
 
+def dist(split, limit):
+    """TAPS 出力と各SE出力の違い（多様性）: log-mel L1 と、TAPS に対する差分のSNR [dB]（小さいほど違いが大きい）"""
+    import torchaudio
+    mel = torchaudio.transforms.MelSpectrogram(16000, n_fft=400, hop_length=160, n_mels=80).to(DEVICE)
+    logmel = lambda y: torch.log10(mel(y).clamp(min=1e-10))
+    partners = ['ce0.0', 'ce10.0', 'demucs', 'tstnn']
+    se = {c: load_any_se(c) for c in ['taps'] + partners}
+    rows = []
+    for s in s64.load_samples(split)[:limit or None]:
+        wav, _ = sf.read(s['path'], dtype='float32')
+        x = torch.from_numpy(wav).unsqueeze(0).to(DEVICE)
+        with torch.no_grad():
+            t = se['taps'](x)
+            for c in partners:
+                y = se[c](x)
+                n = min(t.shape[-1], y.shape[-1])
+                tt, yy = t[..., :n], y[..., :n]
+                snr = 10 * torch.log10((tt ** 2).sum() / ((yy - tt) ** 2).sum().clamp(min=1e-12))
+                rows.append(dict(utt=s['utt'], spk=s['spk'], partner=c,
+                                 logmel_l1=round((logmel(yy) - logmel(tt)).abs().mean().item(), 4),
+                                 snr_db=round(snr.item(), 2)))
+    OUT.mkdir(parents=True, exist_ok=True)
+    tag = '' if split == 'test' else f'_{split}'
+    with open(OUT / f'diversity{tag}.csv', 'w', newline='', encoding='utf-8') as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
+    print(f'\nTAPS との違い（{split}, {len(rows) // len(partners)}発話の平均）')
+    for c in partners:
+        r = [x for x in rows if x['partner'] == c]
+        print(f'  {c:<8} log-mel L1={np.mean([x["logmel_l1"] for x in r]):.4f}  '
+              f'差分SNR={np.mean([x["snr_db"] for x in r]):.2f} dB')
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('stage', choices=['asr', 'summary'])
+    ap.add_argument('stage', choices=['asr', 'summary', 'dist'])
     ap.add_argument('--asr', choices=ASRS)
     ap.add_argument('--split', choices=['test', 'dev'], default='test')
     ap.add_argument('--limit', type=int, default=0)
-    ap.add_argument('--set', choices=['lambda', 'avg'], default='lambda')
+    ap.add_argument('--set', choices=list(SETS), default='lambda')
     a = ap.parse_args()
     if a.stage == 'asr':
         if not a.asr:
             ap.error('--asr が必要')
-        asr(a.asr, a.split, a.limit, CONDS if a.set == 'lambda' else ['taps'] + list(AVGS))
+        asr(a.asr, a.split, a.limit, SETS[a.set])
+    elif a.stage == 'dist':
+        dist(a.split, a.limit)
     else:
         summary(a.split)
 
