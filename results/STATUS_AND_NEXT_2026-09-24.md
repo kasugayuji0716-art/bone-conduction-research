@@ -43,8 +43,8 @@
 | 実験スクリプト | 51（CE学習）・53（λ探索）・61（櫛周期性）・62（非Whisper ASR・帯域/ノッチ）・63（句読点正規化再採点）・64（全条件の再推論、hyp保存） |
 
 ### 1.5 計算環境
-- 新GPU PC（RTX PRO 6000 96GB、共用WSL Ubuntu-24.04、`ssh labgpu` / `labgpu-ts`）へ移行中。旧 DL-Box5（RTX 4500 24GB）は以後使わない
-- 未完了: DL-Box5 から checkpoints / data の移行、`whisper_ft_ct2` の変換（checkpoints 移行後）
+- 新GPU PC（RTX PRO 6000 96GB、共用WSL Ubuntu-24.04、`ssh labgpu` / `labgpu-ts`）へ移行済み（2026-09-24）。旧結果の再現を確認（TAPS 0.2297/旧0.2302、CE10 0.1956/旧0.1956、FT no-SE 0.1376/旧0.1375）。旧 DL-Box5（RTX 4500 24GB）は以後使わない
+- 注意: 共用Windowsの Windows Update / WSL 更新で WSL ごと止まることがある（2026-09-25 に2回）。スクリプトはすべて再開可能
 - 96GB になったため、複数ASR・大型SSLを同時に載せる学習が現実的になった
 
 ---
@@ -72,10 +72,13 @@
 
 目標: **重みや勾配を使えない ASR にも効く、ASR非依存の喉マイクSE**。
 
-### Step 0（今すぐ・学習不要、新GPU PC）
-- checkpoints / data を新GPU PC へ移行し、script 64 の一部条件で旧結果が再現するか確認
-- **残差スイープ**: x = TAPS + α(CE − TAPS)（α∈[0, 1.5]）を 6 ASR で評価。Whisper で改善・XLS-R で悪化が単調なら「Whisper専用成分」を直接示せる
-- **カットオフ × 認識器の行列**: TAPS / CE 出力に 3–8 kHz のローパス、櫛ノッチ版も全ASRで評価（現状 Whisper-small のみ）
+### Step 0（完了 2026-09-26 → `results/STEP0_RESULTS_2026-09-26.md`、scripts 65/66）
+- 移行と再現確認: 完了
+- **残差スイープ**: 予想した単調な形ではなく山型。**α=0.5 で6認識器すべてが TAPS より改善**（test/dev とも、XLS-R 以外 10/10）。大きい α で非Whisper系が悪化
+- **対照**: λ を下げた CE（学習で変化量を抑える）では非Whisper系の改善は出ない（λ=0 は全認識器で TAPS より悪い）。TAPS+CE0 の平均でも全認識器が小幅改善 → 改善の主因は**2つの SE 出力の平均**。CE の中身による上積みもあるが多様性の交絡が未分離
+- **カットオフ行列**: TAPS の合成高域（>4 kHz）は Whisper系4つで有害、XLS-R では必要。CE の改善の主因は 4 kHz 以下（全Whisper系で確認）
+- **FT Whisper**: SE の改善は FT が苦手な話者に集中（未解決点B の答えの候補）
+- 次: Demucs/TSTNN との平均（多様性の対照）、平均出力の1モデルへの蒸留、FT の話者別改善と学習話者からの距離の相関
 
 ### Step 1（本命）: SSL表現損失による喉マイクSE
 - 損失: L = L1 + MR-STFT + λ · mean_{l>N/2} ‖φ_l(ŝ) − φ_l(s_air)‖²（Sato 2025 方式）

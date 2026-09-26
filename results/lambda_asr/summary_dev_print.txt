@@ -1,0 +1,12 @@
+=== 13:49 scripts/66_lambda_cross_asr.py summary --split dev
+
+CE λ 違い × 認識器  CER（句読点除去、dev）
+ASR                TAPS   λ=0.0   λ=0.1   λ=0.5   λ=1.0   λ=2.0   λ=5.0  λ=10.0  ρ(λ,CER)
+mms-1b-all       0.3831  0.3889  0.3921  0.3974  0.3976  0.3794  0.3831  0.3830     -0.54
+xlsr-korean      0.2443  0.2499  0.2578  0.2743  0.2867  0.2829  0.2771  0.2928      0.86
+
+2つのSE出力の平均（対照）  CER  （括弧内は TAPS 比）
+mms-1b-all       avg_taps_ce0.0=0.3776(-1.4%)  avg_taps_ce10.0=0.3613(-5.7%)  avg_ce0.0_ce10.0=0.3657(-4.5%)
+xlsr-korean      avg_taps_ce0.0=0.2386(-2.3%)  avg_taps_ce10.0=0.2307(-5.6%)  avg_ce0.0_ce10.0=0.2331(-4.6%)
+
+Saved: /home/kasuga/kasuga/bone-conduction-research/results/lambda_asr/summary_dev.csv, pairs_dev.csv
