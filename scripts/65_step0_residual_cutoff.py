@@ -61,7 +61,13 @@ OTHER = ['taps_notch', 'ce_notch', 'hyb_tapsLow_ceHigh', 'hyb_ceLow_tapsHigh']
 CONDS = MIX + LPF + OTHER
 
 WHISPER = ['whisper-base', 'whisper-small', 'whisper-medium', 'whisper-ft']
-ASRS = WHISPER + list(s62.CTC_MODELS)
+# 2026-09-27 追加（学習に使っていない系列を増やす）
+#   whisper-large-v3-turbo: 強いASRでの確認（Whisper系列なので新しい系列には数えない）
+#   qwen3-asr-1.7b: LLM デコーダ型。qwen-asr が accelerate を下げるため別 venv（venv-qwen）で実行する
+#   zipformer-ko: Zipformer transducer（sherpa-onnx、KsponSpeech のみで学習）。空白なしで出力するため空白除去 CER でも比べる
+EXTRA = ['whisper-large-v3-turbo', 'qwen3-asr-1.7b', 'zipformer-ko']
+ASRS = WHISPER + list(s62.CTC_MODELS) + EXTRA
+ZIPFORMER_DIR = Path.home() / 'models' / 'sherpa-onnx-zipformer-korean-2024-06-24'
 
 _SOS = {fc: butter(8, fc, btype='low', fs=SR, output='sos') for fc in CUTOFFS}
 
@@ -115,6 +121,33 @@ def gen(limit, split):
 
 # ---------------- asr ----------------
 def load_asr(name):
+    if name == 'whisper-large-v3-turbo':
+        from faster_whisper import WhisperModel
+        model = WhisperModel('large-v3-turbo', device=DEVICE, compute_type='float16')
+
+        def run(wav):
+            segs, _ = model.transcribe(wav, language='ko', beam_size=5)
+            return ''.join(g.text for g in segs).strip()
+        return run
+    if name == 'qwen3-asr-1.7b':
+        from qwen_asr import Qwen3ASRModel
+        model = Qwen3ASRModel.from_pretrained('Qwen/Qwen3-ASR-1.7B', dtype=torch.bfloat16, device_map='cuda:0',
+                                              max_inference_batch_size=8, max_new_tokens=256)
+        return lambda wav: model.transcribe(audio=(wav, SR), language='Korean')[0].text.strip()
+    if name == 'zipformer-ko':
+        import sherpa_onnx
+        d = ZIPFORMER_DIR
+        rec = sherpa_onnx.OfflineRecognizer.from_transducer(
+            encoder=str(d / 'encoder-epoch-99-avg-1.onnx'), decoder=str(d / 'decoder-epoch-99-avg-1.onnx'),
+            joiner=str(d / 'joiner-epoch-99-avg-1.onnx'), tokens=str(d / 'tokens.txt'),
+            num_threads=8, sample_rate=SR, feature_dim=80, decoding_method='greedy_search')
+
+        def run(wav):
+            st = rec.create_stream()
+            st.accept_waveform(SR, wav)
+            rec.decode_stream(st)
+            return st.result.text.strip()
+        return run
     if name in WHISPER:
         from faster_whisper import WhisperModel
         src = s64.asr_source(name)

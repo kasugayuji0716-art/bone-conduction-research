@@ -14,6 +14,7 @@
   smooth_t3 / smooth_f5       TAPS の振幅を時間方向3フレーム / 周波数方向5ビンで移動平均（歪みの平滑化の対照）
   oa_w20 / oa_w40             観測（喉マイク生音声）を波形で足す: (1-w)·TAPS + w·観測（Iwamoto et al. の observation adding）
   moa_w25                     観測との振幅平均（重み 0.25、位相は TAPS）
+  no_se                       SE なし（喉マイク生音声）
 
 ステージ
   ltas     dev で TAPS と統合出力の平均振幅スペクトルを求め results/eq_control/ltas_dev.npz に保存（eq_*_dev に必要）
@@ -50,7 +51,8 @@ OUT = BASE_DIR / 'results' / 'eq_control'
 LTAS = OUT / 'ltas_dev.npz'
 ASRS = s65.ASRS
 CONDS = ['taps', 'm4_amp', 'p2_w50', 'eq_m4_dev', 'eq_m4_utt', 'eq_p2_dev', 'eq_p2_utt',
-         'smooth_t3', 'smooth_f5', 'oa_w20', 'oa_w40', 'moa_w25']
+         'smooth_t3', 'smooth_f5', 'oa_w20', 'oa_w40', 'moa_w25',
+         'no_se']   # 2026-09-27 追加: 強いASR（large-v3-turbo, Qwen3-ASR）では SE なしが基準として必要
 
 
 def se_outputs(se, wav):
@@ -109,6 +111,7 @@ def make_conds(outs, obs, n, gains):
         out[f'oa_w{int(w * 100)}'] = ((1 - w) * taps_w + w * obs).cpu().numpy().astype(np.float32)
     Ao = s67.stft(obs).abs()
     out['moa_w25'] = ist(0.75 * At + 0.25 * Ao)
+    out['no_se'] = obs.cpu().numpy().astype(np.float32)
     return out
 
 
