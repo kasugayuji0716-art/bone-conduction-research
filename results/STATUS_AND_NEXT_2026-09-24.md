@@ -80,6 +80,7 @@
 - **FT Whisper**: SE の改善は FT が苦手な話者に集中（未解決点B の答えの候補）
 - **多様性の対照（2026-09-26）**: ASR損失を使わない TAPS SE-Conformer と TAPS Demucs の**振幅平均**（位相は TAPS）で6認識器すべてが改善（Whisper系 −4〜−9%、MMS −2.7%、XLS-R −2.3%）。波形平均は位相差で打ち消し合い悪化。CE10 との平均の上積みは主に Whisper 系
 - 次: 振幅平均の一般化（3つ以上・重み・ASRを使わない重み決め）、平均出力の1モデルへの蒸留、FT の話者別改善と学習話者からの距離の相関
+- **2026-09-28/29（→ `results/FUSION_RESULTS_2026-09-28.md`、`results/TRANSFER_DISTILL_RESULTS_2026-09-29.md`）**: 振幅統合は新しい認識器（Qwen3-ASR、large-v3-turbo、Zipformer）を含む9認識器すべてで改善し、イコライザ・平滑化では説明できない。**CE の転移は入力特徴量で分かれる**（Whisper log-mel を使う Qwen3-ASR で −16.2%、Kaldi fbank の Zipformer で +45.9%）。1つの SE への蒸留は効果の大半を失うため打ち切り。次: 仕組みの検証（script 72）、推論時間（script 71）、雑音条件、入力特徴量の異なる複数 ASR での学習
 
 ### Step 1（本命）: SSL表現損失による喉マイクSE
 - 損失: L = L1 + MR-STFT + λ · mean_{l>N/2} ‖φ_l(ŝ) − φ_l(s_air)‖²（Sato 2025 方式）
