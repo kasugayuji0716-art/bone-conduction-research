@@ -65,8 +65,9 @@ SETS = {'lambda': CONDS,
         'div': ['taps', 'demucs', 'tstnn', 'avg_taps_demucs', 'avg_taps_tstnn',
                 'avg_taps_ce0.0', 'avg_taps_ce10.0'] + list(MAVGS),
         # script 69 で振幅統合（m4_med）を1つの SE-Conformer に蒸留したモデル
-        'distill': ['taps', 'ce0.0', 'distill_m4_med_dev']}
-ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev']
+        'distill': ['taps', 'ce0.0', 'distill_m4_med_dev'],
+        'distill_mag': ['taps', 'distill_m4_med_dev_mag']}
+ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag']
 
 _WIN = torch.hann_window(512)
 

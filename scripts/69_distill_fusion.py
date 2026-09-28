@@ -24,6 +24,9 @@
     python scripts/69_distill_fusion.py targets [--target m4_med]
     python scripts/69_distill_fusion.py train   [--target m4_med] [--epochs 50 --batch_size 8 --lr 3e-4]
     python scripts/69_distill_fusion.py train   --train_split dev --lr 1e-4 --epochs 100 --patience 10
+    python scripts/69_distill_fusion.py train   --train_split dev --loss mag ...
+  --loss mag: 教師は「統合した振幅 + TAPS の位相」なので、位相に依存する波形 L1 を外し、振幅だけを合わせる
+  （マルチ解像度STFT + 教師を作ったのと同じ STFT 512/128 での振幅 L1 と対数振幅 L1）
   評価は script 66 の --set distill（6+3認識器）
 """
 
@@ -125,7 +128,8 @@ def collate(batch):
 
 
 def train(args):
-    ckpt = BASE_DIR / 'checkpoints' / f'distill_{args.target}{"_dev" if args.train_split == "dev" else ""}'
+    ckpt = BASE_DIR / 'checkpoints' / (f'distill_{args.target}{"_dev" if args.train_split == "dev" else ""}'
+                                      f'{"_mag" if args.loss == "mag" else ""}')
     ckpt.mkdir(parents=True, exist_ok=True)
     from models.seconformer import seconformer
     model = seconformer(**s51.TAPS_SE_CONFIG).to(DEVICE)
@@ -137,7 +141,12 @@ def train(args):
     def loss_fn(x, y):
         out = model(x).squeeze(1)
         n = min(out.shape[-1], y.shape[-1])
-        return F.l1_loss(out[..., :n], y[..., :n]) + stft_loss(out[..., :n], y[..., :n])
+        o, t = out[..., :n], y[..., :n]
+        if args.loss == 'mag':
+            Mo, Mt = s67.stft(o).abs(), s67.stft(t).abs()
+            return (stft_loss(o, t) + F.l1_loss(Mo, Mt)
+                    + F.l1_loss(torch.log(Mo + 1e-5), torch.log(Mt + 1e-5)))
+        return F.l1_loss(o, t) + stft_loss(o, t)
 
     if args.train_split == 'dev':
         spk = sorted({s['spk'] for s in s64.load_samples('dev')})
@@ -202,6 +211,7 @@ def main():
     ap.add_argument('--lr', type=float, default=3e-4)
     ap.add_argument('--patience', type=int, default=5)
     ap.add_argument('--train_split', choices=['train', 'dev'], default='train')
+    ap.add_argument('--loss', choices=['wav_stft', 'mag'], default='wav_stft')
     a = ap.parse_args()
     make_targets(a.target) if a.stage == 'targets' else train(a)
 
