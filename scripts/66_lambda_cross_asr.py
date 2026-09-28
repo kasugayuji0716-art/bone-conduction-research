@@ -63,7 +63,10 @@ ALL_CONDS = CONDS + OTHER_SE + list(AVGS)
 SETS = {'lambda': CONDS,
         'avg': ['taps', 'avg_taps_ce0.0', 'avg_taps_ce10.0', 'avg_ce0.0_ce10.0'],
         'div': ['taps', 'demucs', 'tstnn', 'avg_taps_demucs', 'avg_taps_tstnn',
-                'avg_taps_ce0.0', 'avg_taps_ce10.0'] + list(MAVGS)}
+                'avg_taps_ce0.0', 'avg_taps_ce10.0'] + list(MAVGS),
+        # script 69 で振幅統合（m4_med）を1つの SE-Conformer に蒸留したモデル
+        'distill': ['taps', 'ce0.0', 'distill_m4_med']}
+ALL_CONDS += ['distill_m4_med']
 
 _WIN = torch.hann_window(512)
 
@@ -81,6 +84,9 @@ def load_any_se(name):
     """(B, T) → (B, T) の SE。TAPS/CE は script 64、Demucs/TSTNN は TAPS 公式実装（taps-baselines/models）"""
     if name in s64.SE_CKPTS:
         return s64.load_se(s64.SE_CKPTS[name])
+    ckpt = BASE_DIR / 'checkpoints' / name / 'best.th'     # script 69 などで学習した SE-Conformer
+    if ckpt.exists():
+        return s64.load_se(ckpt)
     pre = BASE_DIR / 'taps-baselines' / 'pretrained'
     if name == 'demucs':
         from models.demucs import demucs
