@@ -14,9 +14,16 @@
   targets  train / dev の教師波形を data/processed/distill_<target>/<split>/<utt>.wav に保存（再開可能）
   train    学習し checkpoints/distill_<target>/best.th と training_log.csv を保存
 
+2026-09-28 追記: train で作った教師では失敗した（dev 損失が TAPS 初期値から一度も下がらず）。統合の元の SE は
+  いずれも TAPS train で学習済みで、train 発話では出力が気導音声に近く SE 同士の差も小さい（log-mel L1:
+  TAPS–Demucs train 0.325 / dev 0.424、TAPS–気導 train 0.405 / dev 0.586）。つまり train の教師には
+  「SE 固有の誤りが打ち消し合う」効果がほとんど含まれない。→ --train_split dev で、SE が見ていない dev 発話の
+  教師を使う（dev 10話者のうち8話者で学習、2話者で早期終了。評価は test のみ）
+
 使い方（GPU PC）
     python scripts/69_distill_fusion.py targets [--target m4_med]
     python scripts/69_distill_fusion.py train   [--target m4_med] [--epochs 50 --batch_size 8 --lr 3e-4]
+    python scripts/69_distill_fusion.py train   --train_split dev --lr 1e-4 --epochs 100 --patience 10
   評価は script 66 の --set distill（6+3認識器）
 """
 
@@ -81,11 +88,13 @@ def make_targets(target):
 
 
 class DistillDataset(Dataset):
-    def __init__(self, split, target):
+    def __init__(self, split, target, speakers=None):
         self.items = []
         excluded = 0
         tdir = target_dir(target, split)
         for s in s64.load_samples(split):
+            if speakers is not None and s['spk'] not in speakers:
+                continue
             info = sf.info(s['path'])
             if info.frames / info.samplerate > MAX_SEC:
                 excluded += 1
@@ -93,7 +102,8 @@ class DistillDataset(Dataset):
             p = tdir / f"{s['utt']}.wav"
             if p.exists():
                 self.items.append((s['path'], p))
-        print(f'  [{split}] {len(self.items)} pairs (excluded {excluded} > {MAX_SEC}s)')
+        who = f' speakers={sorted(speakers)}' if speakers is not None else ''
+        print(f'  [{split}] {len(self.items)} pairs (excluded {excluded} > {MAX_SEC}s){who}')
 
     def __len__(self):
         return len(self.items)
@@ -115,7 +125,7 @@ def collate(batch):
 
 
 def train(args):
-    ckpt = BASE_DIR / 'checkpoints' / f'distill_{args.target}'
+    ckpt = BASE_DIR / 'checkpoints' / f'distill_{args.target}{"_dev" if args.train_split == "dev" else ""}'
     ckpt.mkdir(parents=True, exist_ok=True)
     from models.seconformer import seconformer
     model = seconformer(**s51.TAPS_SE_CONFIG).to(DEVICE)
@@ -129,9 +139,15 @@ def train(args):
         n = min(out.shape[-1], y.shape[-1])
         return F.l1_loss(out[..., :n], y[..., :n]) + stft_loss(out[..., :n], y[..., :n])
 
-    tr = DataLoader(DistillDataset('train', args.target), batch_size=args.batch_size, shuffle=True,
+    if args.train_split == 'dev':
+        spk = sorted({s['spk'] for s in s64.load_samples('dev')})
+        tr_ds = DistillDataset('dev', args.target, set(spk[:8]))
+        dv_ds = DistillDataset('dev', args.target, set(spk[8:]))
+    else:
+        tr_ds, dv_ds = DistillDataset('train', args.target), DistillDataset('dev', args.target)
+    tr = DataLoader(tr_ds, batch_size=args.batch_size, shuffle=True,
                     collate_fn=collate, num_workers=2, pin_memory=True)
-    dv = DataLoader(DistillDataset('dev', args.target), batch_size=args.batch_size, shuffle=False,
+    dv = DataLoader(dv_ds, batch_size=args.batch_size, shuffle=False,
                     collate_fn=collate, num_workers=2, pin_memory=True)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.99))
 
@@ -185,6 +201,7 @@ def main():
     ap.add_argument('--batch_size', type=int, default=8)
     ap.add_argument('--lr', type=float, default=3e-4)
     ap.add_argument('--patience', type=int, default=5)
+    ap.add_argument('--train_split', choices=['train', 'dev'], default='train')
     a = ap.parse_args()
     make_targets(a.target) if a.stage == 'targets' else train(a)
 
