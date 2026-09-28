@@ -25,6 +25,8 @@
     python scripts/69_distill_fusion.py train   [--target m4_med] [--epochs 50 --batch_size 8 --lr 3e-4]
     python scripts/69_distill_fusion.py train   --train_split dev --lr 1e-4 --epochs 100 --patience 10
     python scripts/69_distill_fusion.py train   --train_split dev --loss mag ...
+    python scripts/69_distill_fusion.py targets --split vibravox          # script 70 で取り出した仏語の喉マイク音声
+    python scripts/69_distill_fusion.py train   --train_split vibravox ... # 学習は VibraVox、早期終了は TAPS dev 全体
   --loss mag: 教師は「統合した振幅 + TAPS の位相」なので、位相に依存する波形 L1 を外し、振幅だけを合わせる
   （マルチ解像度STFT + 教師を作ったのと同じ STFT 512/128 での振幅 L1 と対数振幅 L1）
   評価は script 66 の --set distill（6+3認識器）
@@ -66,12 +68,23 @@ def target_dir(target, split):
     return BASE_DIR / 'data' / 'processed' / f'distill_{target}' / split
 
 
-def make_targets(target):
+VIBRAVOX = BASE_DIR / 'data' / 'raw' / 'vibravox_unlab'
+
+
+def load_items(split):
+    """[{utt, spk, path}]。TAPS は script 64 の load_samples、vibravox は script 70 の metadata.csv"""
+    if split != 'vibravox':
+        return s64.load_samples(split)
+    return [dict(utt=r['utt'], spk=r['speaker_id'], path=VIBRAVOX / 'throat' / f"{r['utt']}.wav")
+            for r in csv.DictReader(open(VIBRAVOX / 'metadata.csv', encoding='utf-8'))]
+
+
+def make_targets(target, splits=('train', 'dev')):
     se = {c: s66.load_any_se(c) for c in s67.SOURCES}
-    for split in ('train', 'dev'):
+    for split in splits:
         out = target_dir(target, split)
         out.mkdir(parents=True, exist_ok=True)
-        samples = s64.load_samples(split)
+        samples = load_items(split)
         t0 = time.time()
         for i, s in enumerate(samples):
             path = out / f"{s['utt']}.wav"
@@ -95,7 +108,7 @@ class DistillDataset(Dataset):
         self.items = []
         excluded = 0
         tdir = target_dir(target, split)
-        for s in s64.load_samples(split):
+        for s in load_items(split):
             if speakers is not None and s['spk'] not in speakers:
                 continue
             info = sf.info(s['path'])
@@ -128,7 +141,8 @@ def collate(batch):
 
 
 def train(args):
-    ckpt = BASE_DIR / 'checkpoints' / (f'distill_{args.target}{"_dev" if args.train_split == "dev" else ""}'
+    split_tag = {'train': '', 'dev': '_dev', 'vibravox': '_vbx'}[args.train_split]
+    ckpt = BASE_DIR / 'checkpoints' / (f'distill_{args.target}{split_tag}'
                                       f'{"_mag" if args.loss == "mag" else ""}')
     ckpt.mkdir(parents=True, exist_ok=True)
     from models.seconformer import seconformer
@@ -152,6 +166,8 @@ def train(args):
         spk = sorted({s['spk'] for s in s64.load_samples('dev')})
         tr_ds = DistillDataset('dev', args.target, set(spk[:8]))
         dv_ds = DistillDataset('dev', args.target, set(spk[8:]))
+    elif args.train_split == 'vibravox':
+        tr_ds, dv_ds = DistillDataset('vibravox', args.target), DistillDataset('dev', args.target)
     else:
         tr_ds, dv_ds = DistillDataset('train', args.target), DistillDataset('dev', args.target)
     tr = DataLoader(tr_ds, batch_size=args.batch_size, shuffle=True,
@@ -210,10 +226,14 @@ def main():
     ap.add_argument('--batch_size', type=int, default=8)
     ap.add_argument('--lr', type=float, default=3e-4)
     ap.add_argument('--patience', type=int, default=5)
-    ap.add_argument('--train_split', choices=['train', 'dev'], default='train')
+    ap.add_argument('--train_split', choices=['train', 'dev', 'vibravox'], default='train')
+    ap.add_argument('--split', choices=['train', 'dev', 'vibravox'], help='targets: この split だけ作る')
     ap.add_argument('--loss', choices=['wav_stft', 'mag'], default='wav_stft')
     a = ap.parse_args()
-    make_targets(a.target) if a.stage == 'targets' else train(a)
+    if a.stage == 'targets':
+        make_targets(a.target, (a.split,) if a.split else ('train', 'dev'))
+    else:
+        train(a)
 
 
 if __name__ == '__main__':
