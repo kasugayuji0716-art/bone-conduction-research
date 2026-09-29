@@ -44,6 +44,9 @@ def manifest():
                     out.write(json.dumps(dict(noisy_filepath=str(t), clean_filepath=str(a), duration=dur)) + '\n')
                     n += 1
         print(f'{split}: {n} pairs → {WORK / (split + ".json")}')
+    # 学習中の検証用: dev から話者ごとに均等に100発話（生成は発話全体を20ステップで解くので全1000発話だと遅い）
+    lines = open(WORK / 'dev.json').read().splitlines()
+    open(WORK / 'dev100.json', 'w').write('\n'.join(lines[::10][:100]) + '\n')
 
 
 def fetch_examples():
@@ -66,9 +69,10 @@ def train(args):
     cmd = [sys.executable, str(EXAMPLES / 'audio_to_audio_train.py'),
            f'--config-path={EXAMPLES / "conf"}', '--config-name=flow_matching_generative_finetuning',
            f'model.train_ds.manifest_filepath={WORK / "train.json"}',
-           f'model.validation_ds.manifest_filepath={WORK / "dev.json"}',
+           f'model.validation_ds.manifest_filepath={WORK / "dev100.json"}',
+           '~model.log_config',
            f'model.train_ds.batch_size={args.batch_size}',
-           'model.validation_ds.batch_size=4',
+           'model.validation_ds.batch_size=1',
            'model.max_utts_evaluation_metrics=200',
            f'+model.optim.sched.max_steps={args.max_steps}',
            f'model.optim.sched.warmup_steps={args.warmup}',
