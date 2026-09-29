@@ -97,7 +97,7 @@ def hyp_path(name, split, limit=0):
     return OUT / f'hyp_{name}{tag}{"_trial" if limit else ""}.csv'
 
 
-def asr(name, split, limit):
+def asr(name, split, limit, conds_all=CONDS):
     OUT.mkdir(parents=True, exist_ok=True)
     out_path = hyp_path(name, split, limit)
     done = set()
@@ -111,11 +111,11 @@ def asr(name, split, limit):
     w = csv.DictWriter(f, fieldnames=['utt', 'spk', 'cond', 'hyp'])
     if new:
         w.writeheader()
-    todo = sum(1 for s in samples for c in CONDS if (s['utt'], c) not in done)
+    todo = sum(1 for s in samples for c in conds_all if (s['utt'], c) not in done)
     print(f'{name} / {split}: {todo} jobs', flush=True)
     t0, n_done = time.time(), 0
     for i, s in enumerate(samples):
-        conds = [c for c in CONDS if (s['utt'], c) not in done]
+        conds = [c for c in conds_all if (s['utt'], c) not in done]
         if not conds:
             continue
         wav, _ = sf.read(s['path'], dtype='float32')
@@ -199,11 +199,12 @@ def main():
     ap.add_argument('--asr', choices=ASRS)
     ap.add_argument('--split', choices=['test', 'dev'], default='test')
     ap.add_argument('--limit', type=int, default=0)
+    ap.add_argument('--conds', nargs='+', choices=CONDS, help='計算する条件を絞る（既定: 全条件）')
     a = ap.parse_args()
     if a.stage == 'asr':
         if not a.asr:
             ap.error('--asr が必要')
-        asr(a.asr, a.split, a.limit)
+        asr(a.asr, a.split, a.limit, a.conds or CONDS)
     else:
         summary(a.split)
 
