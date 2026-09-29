@@ -1,0 +1,13 @@
+module,n,ms_per_utt,rtf
+taps,55,19.9,0.0019
+demucs,55,836.7,0.08
+tstnn,55,119.1,0.0114
+ce0.0,55,10.4,0.001
+fusion,55,2.5,0.0002
+se_total,55,988.6,0.0945
+whisper-small,55,413.6,0.0396
+whisper-medium,55,666.0,0.0637
+whisper-large-v3-turbo,55,260.7,0.0249
+xlsr-korean,55,27.3,0.0026
+mms-1b-all,55,55.7,0.0053
+zipformer-ko,55,188.2,0.018
