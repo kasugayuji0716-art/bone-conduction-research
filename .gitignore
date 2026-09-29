@@ -41,3 +41,7 @@ data/raw/vibravox/
 
 # ── ログファイル ─────────────────────────────────────────────────
 logs/*.log
+
+# ── GPU PC の追加 venv・ラベルなしデータ（2026-09-29） ──────────────
+venv-qwen/
+data/raw/vibravox_unlab/
