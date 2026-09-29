@@ -70,10 +70,12 @@ SETS = {'lambda': CONDS,
         'distill_vbx': ['taps', 'distill_m4_med_vbx', 'distill_m4_med_vbx_mag'],
         # script 74: SSL-MSE（Sato 2025 型）と複数ASR損失（Whisper CE + XLS-R CTC、単純和 / AND-mask）
         'multiloss': ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr',
-                      'ce10_ctc4_sum', 'ce10_ctc4_and']}
+                      'ce10_ctc4_sum', 'ce10_ctc4_and'],
+        # script 75: 生成モデル（NeMo flow matching）を TAPS で追加学習
+        'flow': ['taps', 'fm_taps']}
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
               'distill_m4_med_vbx', 'distill_m4_med_vbx_mag',
-              'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and']
+              'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and', 'fm_taps']
 
 _WIN = torch.hann_window(512)
 
@@ -85,6 +87,9 @@ def mag_avg(ref, other):
     O = torch.stft(o, 512, 128, window=_WIN, return_complex=True)
     Y = 0.5 * (R.abs() + O.abs()) * torch.exp(1j * R.angle())
     return torch.istft(Y, 512, 128, window=_WIN, length=len(ref)).numpy().astype(np.float32)
+
+
+SE_WAV = BASE_DIR / 'data' / 'processed' / 'se_wav'
 
 
 def load_any_se(name):
@@ -122,6 +127,8 @@ def asr(name, split, limit, conds_all=CONDS):
         done = {(r['utt'], r['cond']) for r in csv.DictReader(open(out_path, encoding='utf-8'))}
     samples = s64.load_samples(split)[:limit or None]
     need = sorted({m for c in conds_all for m in AVGS.get(c, (c,))})
+    wavdir = {m: SE_WAV / m / split for m in need if (SE_WAV / m / split).is_dir()}   # script 75 など保存済み音声
+    need = [m for m in need if m not in wavdir]
     se = {c: load_any_se(c) for c in need}
     run = s65.load_asr(name)
     new = not out_path.exists() or limit
@@ -143,6 +150,9 @@ def asr(name, split, limit, conds_all=CONDS):
         with torch.no_grad():
             outs = {m: se[m](x).squeeze().cpu().numpy().astype(np.float32)
                     for m in need if any(m in AVGS.get(c, (c,)) for c in conds)}
+        for m, d in wavdir.items():
+            if any(m in AVGS.get(c, (c,)) for c in conds):
+                outs[m] = sf.read(d / f"{s['utt']}.wav", dtype='float32')[0]
         for c in conds:
             if c in AVGS:
                 a, b = (outs[m] for m in AVGS[c])
