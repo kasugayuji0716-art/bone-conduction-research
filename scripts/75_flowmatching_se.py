@@ -61,7 +61,7 @@ def train(args):
     exp = BASE_DIR / 'checkpoints' / args.tag
     cmd = [sys.executable, str(EXAMPLES / 'audio_to_audio_train.py'),
            f'--config-path={EXAMPLES / "conf"}', '--config-name=flow_matching_generative_finetuning',
-           f'+init_from_pretrained_model={PRETRAINED}',
+           '~init_from_nemo_model', f'+init_from_pretrained_model={PRETRAINED}',
            f'model.train_ds.manifest_filepath={WORK / "train.json"}',
            f'model.validation_ds.manifest_filepath={WORK / "dev.json"}',
            f'model.train_ds.batch_size={args.batch_size}',
