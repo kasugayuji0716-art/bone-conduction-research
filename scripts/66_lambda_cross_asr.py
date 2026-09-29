@@ -67,9 +67,13 @@ SETS = {'lambda': CONDS,
         # script 69 で振幅統合（m4_med）を1つの SE-Conformer に蒸留したモデル
         'distill': ['taps', 'ce0.0', 'distill_m4_med_dev'],
         'distill_mag': ['taps', 'distill_m4_med_dev_mag'],
-        'distill_vbx': ['taps', 'distill_m4_med_vbx', 'distill_m4_med_vbx_mag']}
+        'distill_vbx': ['taps', 'distill_m4_med_vbx', 'distill_m4_med_vbx_mag'],
+        # script 74: SSL-MSE（Sato 2025 型）と複数ASR損失（Whisper CE + XLS-R CTC、単純和 / AND-mask）
+        'multiloss': ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr',
+                      'ce10_ctc4_sum', 'ce10_ctc4_and']}
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
-              'distill_m4_med_vbx', 'distill_m4_med_vbx_mag']
+              'distill_m4_med_vbx', 'distill_m4_med_vbx_mag',
+              'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and']
 
 _WIN = torch.hann_window(512)
 
