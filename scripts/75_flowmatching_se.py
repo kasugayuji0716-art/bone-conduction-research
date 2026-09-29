@@ -54,6 +54,10 @@ def fetch_examples():
             dst.parent.mkdir(parents=True, exist_ok=True)
             urllib.request.urlretrieve(RAW + rel, dst)
             print(f'fetched {rel}')
+    # 既定の init_from_nemo_model: null があると初期化指定が2つとみなされるので、事前学習モデルに置き換える
+    conf = EXAMPLES / 'conf' / 'flow_matching_generative_finetuning.yaml'
+    conf.write_text(conf.read_text().replace('init_from_nemo_model: null',
+                                             f'init_from_pretrained_model: {PRETRAINED}'))
 
 
 def train(args):
@@ -61,7 +65,6 @@ def train(args):
     exp = BASE_DIR / 'checkpoints' / args.tag
     cmd = [sys.executable, str(EXAMPLES / 'audio_to_audio_train.py'),
            f'--config-path={EXAMPLES / "conf"}', '--config-name=flow_matching_generative_finetuning',
-           '~init_from_nemo_model', f'+init_from_pretrained_model={PRETRAINED}',
            f'model.train_ds.manifest_filepath={WORK / "train.json"}',
            f'model.validation_ds.manifest_filepath={WORK / "dev.json"}',
            f'model.train_ds.batch_size={args.batch_size}',
