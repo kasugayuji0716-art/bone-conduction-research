@@ -15,6 +15,9 @@
   喉マイク＋SE: {taps, ce, m4amp} × 喉マイク側 SNR {clean, 20, 10, 5}
     - 喉マイクは周囲の音を強く減衰して拾う。漏れの大きさは実測していないので、喉マイク側の SNR を直接振る
       （例: 気導 0 dB のとき喉 20 dB なら、漏れが気導より 20 dB 小さい状況に相当）。論文では感度分析として扱う
+    - 喉マイクの雑音は、喉マイク音声と同じく 16k → 8k → 16k を通して 4 kHz 以上をなくしてから足す（TAPS の喉マイクは
+      8 kHz 収録で 4 kHz 以上は記録されないため。全帯域の雑音を足すと、実際には入らない帯域に雑音が入り不当に不利になる。
+      2026-09-29 の試行で気付き修正）
     - ce: CE λ=10（Whisper-small の CE 損失で学習）、m4amp: 4つの SE（TAPS/Demucs/TSTNN/CE0）の振幅平均（位相 TAPS）
 認識器: whisper-small, whisper-large-v3-turbo, qwen3-asr-1.7b, xlsr-korean, zipformer-ko
 CER: 句読点除去後（Zipformer は空白も除去）。検定は話者単位
@@ -41,6 +44,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 import torch
+from scipy.signal import resample_poly
 
 BASE_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(BASE_DIR / 'scripts'))
@@ -69,7 +73,14 @@ def prep():
         out = DEMAND_DIR / f'{env}.wav'
         if out.exists():
             continue
-        data = urllib.request.urlopen(ZENODO.format(env=env), timeout=600).read()
+        for attempt in range(3):                 # Zenodo は途中で切れることがある
+            try:
+                data = urllib.request.urlopen(ZENODO.format(env=env), timeout=600).read()
+                break
+            except Exception as e:
+                print(f'  {env}: retry ({e.__class__.__name__})', flush=True)
+        else:
+            print(f'  {env}: skipped'); continue
         z = zipfile.ZipFile(io.BytesIO(data))
         name = next(n for n in z.namelist() if n.endswith('ch01.wav'))
         x, sr = sf.read(io.BytesIO(z.read(name)), dtype='float32')
@@ -124,6 +135,7 @@ def gen(limit):
             out[f'air_snr{snr}'] = add_noise(air, noise, snr)
         # 喉マイクには、同じ環境の別区間の雑音（気導とは独立）を使う
         noise_t, _ = noise_for(s['utt'] + '#throat', n, TEST_ENVS)
+        noise_t = resample_poly(resample_poly(noise_t, 1, 2), 2, 1)[:n].astype(np.float32)   # 4 kHz 以上をなくす（喉マイクの収録帯域）
         for lv in ['clean'] + [f'snr{v}' for v in THROAT_SNRS]:
             x = throat if lv == 'clean' else add_noise(throat, noise_t, int(lv[3:]))
             xt = torch.from_numpy(x).unsqueeze(0).to(DEVICE)
