@@ -26,7 +26,7 @@ WORK = BASE_DIR / 'data' / 'processed' / 'nemo75'
 SE_WAV = BASE_DIR / 'data' / 'processed' / 'se_wav'
 EXAMPLES = BASE_DIR / 'third_party' / 'nemo_examples'
 RAW = 'https://raw.githubusercontent.com/NVIDIA-NeMo/Speech/main/examples/audio/'
-PRETRAINED = 'sr_ssl_flowmatching_16k_430m'
+PRETRAINED = 'nvidia/sr_ssl_flowmatching_16k_430m'
 
 
 def manifest():
