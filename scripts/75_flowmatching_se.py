@@ -75,7 +75,7 @@ def train(args):
            f'trainer.max_steps={args.max_steps}',
            f'trainer.val_check_interval={args.val_every}',
            'trainer.check_val_every_n_epoch=null',
-           'trainer.devices=1', 'trainer.strategy=auto', 'trainer.precision=bf16-mixed',
+           'trainer.devices=1', 'trainer.strategy=auto', 'trainer.precision=32',
            'trainer.sync_batchnorm=false',
            f'exp_manager.exp_dir={exp}', f'exp_manager.name={args.tag}',
            'exp_manager.early_stopping_callback_params.patience=1000']
@@ -113,7 +113,7 @@ def infer(args):
         if wav.ndim > 1:
             wav = wav.mean(axis=1)
         x = torch.from_numpy(wav)[None, None].cuda()          # (B, C, T)
-        with torch.no_grad(), torch.autocast('cuda', dtype=torch.bfloat16):
+        with torch.no_grad():
             y, _ = model.forward(input_signal=x, input_length=torch.tensor([x.shape[-1]], device='cuda'))
         y = y.float().squeeze().cpu().numpy()[:len(wav)]
         sf.write(dst, y.astype(np.float32), sr)
