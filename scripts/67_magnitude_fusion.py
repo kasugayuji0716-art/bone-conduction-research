@@ -14,6 +14,8 @@
   m3_amp / m3_pow / m3_log / m3_med
                             TAPS・Demucs・TSTNN の振幅平均 / パワー平均 / 対数平均 / 中央値
   m4_amp / m4_med           m3 に CE0（λ=0、ASR損失なしで追加学習した SE-Conformer）を加えた4つ
+  m3nd_amp / m3nd_med       Demucs を除いた3つ（TAPS・TSTNN・CE0）。2026-09-29 追加: 推論時間の約85%が Demucs
+                            （script 71）なので、Demucs なしでどこまで効果が残るかを見る
 認識器: script 65 と同じ6つ。CER は句読点除去後、検定は話者単位（n=10）
 
 出力
@@ -46,7 +48,7 @@ OUT = BASE_DIR / 'results' / 'fusion'
 ASRS = s65.ASRS
 SOURCES = ['taps', 'demucs', 'tstnn', 'ce0.0']
 CONDS = ['taps', 'p2_w25', 'p2_w50', 'p2_w75', 'p2_w50_phD', 'p2_log',
-         'm3_amp', 'm3_pow', 'm3_log', 'm3_med', 'm4_amp', 'm4_med']
+         'm3_amp', 'm3_pow', 'm3_log', 'm3_med', 'm4_amp', 'm4_med', 'm3nd_amp', 'm3nd_med']
 N_FFT, HOP = 512, 128
 _WIN = torch.hann_window(N_FFT).to(DEVICE)
 EPS = 1e-8
@@ -68,6 +70,7 @@ def fuse_all(outs):
     ph_t, ph_d = torch.exp(1j * S['taps'].angle()), torch.exp(1j * S['demucs'].angle())
     m3 = torch.stack([A['taps'], A['demucs'], A['tstnn']])
     m4 = torch.stack([A['taps'], A['demucs'], A['tstnn'], A['ce0.0']])
+    m3nd = torch.stack([A['taps'], A['tstnn'], A['ce0.0']])
     mags = {
         'p2_w25': 0.75 * A['taps'] + 0.25 * A['demucs'],
         'p2_w50': 0.5 * (A['taps'] + A['demucs']),
@@ -79,6 +82,8 @@ def fuse_all(outs):
         'm3_med': m3.median(0).values,
         'm4_amp': m4.mean(0),
         'm4_med': m4.median(0).values,     # 偶数個のときは torch.median は下側の値
+        'm3nd_amp': m3nd.mean(0),
+        'm3nd_med': m3nd.median(0).values,
     }
     out = {'taps': outs['taps'].cpu().numpy().astype(np.float32)}
     for c, M in mags.items():
