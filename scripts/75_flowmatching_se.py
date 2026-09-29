@@ -82,7 +82,8 @@ def train(args):
            'trainer.devices=1', 'trainer.strategy=auto', 'trainer.precision=32',
            'trainer.sync_batchnorm=false',
            f'exp_manager.exp_dir={exp}', f'exp_manager.name={args.tag}',
-           'exp_manager.early_stopping_callback_params.patience=1000']
+           'exp_manager.early_stopping_callback_params.patience=1000',
+           'exp_manager.checkpoint_callback_params.save_top_k=1']   # 1つ約5GB（最適化状態込み）
     print(' '.join(cmd), flush=True)
     subprocess.run(cmd, check=True)
 
