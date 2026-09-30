@@ -112,7 +112,7 @@ def infer(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = list(csv.DictReader(open(TAPS_DIR / f'metadata_{args.split}.csv', encoding='utf-8')))
     rows = rows[:args.limit or None]
-    torch.manual_seed(0)
+    win = torch.hann_window(512)
     for i, row in enumerate(rows):
         utt = f"{row['speaker_id']}_{row['sentence_id']}"
         dst = out_dir / f'{utt}.wav'
@@ -122,9 +122,18 @@ def infer(args):
         if wav.ndim > 1:
             wav = wav.mean(axis=1)
         x = torch.from_numpy(wav)[None, None].cuda()          # (B, C, T)
-        with torch.no_grad():
-            y, _ = model.forward(input_signal=x, input_length=torch.tensor([x.shape[-1]], device='cuda'))
-        y = y.float().squeeze().cpu().numpy()[:len(wav)]
+        ys = []
+        for k in range(args.n_avg):                            # 発話ごとに乱数を固定（再開しても同じ出力）
+            torch.manual_seed(args.seed * 1000003 + k * 7919 + i)
+            with torch.no_grad():
+                y, _ = model.forward(input_signal=x, input_length=torch.tensor([x.shape[-1]], device='cuda'))
+            ys.append(y.float().squeeze().cpu()[:len(wav)])
+        if len(ys) == 1:
+            y = ys[0].numpy()
+        else:   # N個のサンプルの振幅を平均し、位相は1つ目のサンプルのもの（script 67 の振幅統合と同じ）
+            S = [torch.stft(v, 512, 128, window=win, return_complex=True) for v in ys]
+            M = torch.stack([z.abs() for z in S]).mean(0)
+            y = torch.istft(M * torch.exp(1j * S[0].angle()), 512, 128, window=win, length=len(wav)).numpy()
         sf.write(dst, y.astype(np.float32), sr)
         if (i + 1) % 100 == 0:
             print(f'  {i + 1}/{len(rows)}', flush=True)
@@ -144,6 +153,8 @@ def main():
     ap.add_argument('--nemo', default='', help='.nemo のパス（省略時は checkpoints/<tag> の最新）')
     ap.add_argument('--out', default='', help='出力名（省略時は tag）')
     ap.add_argument('--limit', type=int, default=0)
+    ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--n_avg', type=int, default=1, help='N個のサンプルを振幅平均')
     ap.add_argument('--scratch', action='store_true', help='事前学習なし（初期値ランダム）で学習する対照')
     args = ap.parse_args()
     {'manifest': lambda: manifest(), 'train': lambda: train(args), 'infer': lambda: infer(args)}[args.stage]()

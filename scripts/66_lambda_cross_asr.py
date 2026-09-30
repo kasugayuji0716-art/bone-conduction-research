@@ -72,10 +72,13 @@ SETS = {'lambda': CONDS,
         'multiloss': ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr',
                       'ce10_ctc4_sum', 'ce10_ctc4_and'],
         # script 75: 生成モデル（NeMo flow matching）を TAPS で追加学習
-        'flow': ['taps', 'fm_taps']}
+        'flow': ['taps', 'fm_taps'],
+        # 生成のばらつき（シード）と N 個の振幅平均、事前学習なしの対照
+        'flow_var': ['taps', 'fm_taps', 'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch']}
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
               'distill_m4_med_vbx', 'distill_m4_med_vbx_mag',
-              'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and', 'fm_taps']
+              'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and', 'fm_taps',
+              'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch']
 
 _WIN = torch.hann_window(512)
 
