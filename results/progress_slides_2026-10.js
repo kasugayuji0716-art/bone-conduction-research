@@ -214,20 +214,29 @@ const bullets = (items, base = {}) => items.map((it, i) => {
 {
   const s = newSlide();
   title(s, "生成モデルは候補の一つ。仮説ごとに小さく試して絞り込む");
-  const hdr = (t) => ({ text: t, options: { bold: true, color: C.primary, fontSize: 15, border: [{ type: "none" }, { type: "none" }, { pt: 1.5, color: C.primary }, { type: "none" }] } });
-  const cell = (t, o = {}) => ({ text: t, options: { fontSize: 14, color: C.body, border: [{ type: "none" }, { type: "none" }, { pt: 0.75, color: C.rule }, { type: "none" }], ...o } });
-  s.addTable([
-    [hdr("方向"), hdr("確かめる仮説"), hdr("最初の小さな実験"), hdr("続ける条件")],
-    [cell("A. 分析（最初に回す）", { bold: true, color: C.primary }), cell("自然な声に近いほど、どの認識器でも誤りが減る"), cell("既存の全出力で、自然な声との距離と9認識器の誤りの関係を見る"), cell("関係が明確なら柱に")],
-    [cell("B. 事前学習", { bold: true }), cell("効いているのは生成でなく、事前学習の知識"), cell("事前学習なしの対照／1段で出力する版"), cell("事前学習ありが大差")],
-    [cell("C. 生成のさせ方", { bold: true }), cell("生成のばらつきが誤りの原因"), cell("シード違いのばらつきと誤りの関係"), cell("両者が連動")],
-    [cell("D. 損失の設計", { bold: true }), cell("自然な声との距離を損失にすれば軽くても効く"), cell("SSL表現の損失などを9認識器で評価"), cell("生成モデルに近づく")],
-    [cell("E. 軽量化", { bold: true }), cell("良い出力を教師にして、軽いモデルへ移せる"), cell("未学習のデータで教師を作り、蒸留"), cell("効果の大半が残る")],
-  ], { x: M, y: 1.6, w: W, colW: [2.5, 3.6, 3.8, W - 9.9], fontFace: FONT, rowH: [0.5, 0.78, 0.66, 0.66, 0.78, 0.66], valign: "middle", margin: [3, 7, 3, 7] });
+  // 行ごとに帯（1行 = 1つの方向）。行の中は「仮説 → 実験 → 続ける条件」と左から右へ読む
+  const rows = [
+    ["A. 分析", "最初に回す", "自然な声に近いほど、どの認識器でも誤りが減る", "既存の全出力で、自然な声との距離と9認識器の誤りの関係を見る", "関係が明確なら柱に"],
+    ["B. 事前学習", "", "効いているのは生成でなく、事前学習の知識", "事前学習なしの対照・1段で出す版", "事前学習ありが大差"],
+    ["C. 生成のさせ方", "", "生成のばらつきが誤りの原因", "シード違いのばらつきと誤りの関係", "両者が連動"],
+    ["D. 損失の設計", "", "自然な声との距離を損失にすれば軽くても効く", "SSL表現の損失などを9認識器で評価", "生成モデルに近づく"],
+    ["E. 軽量化", "", "良い出力を教師にして、軽いモデルへ移せる", "未学習のデータで教師を作り、蒸留", "効果の大半が残る"],
+  ];
+  const cx = [M + 0.2, M + 2.55, M + 6.35, M + 10.05], cw = [2.2, 3.4, 3.3, W - 10.05 - 0.15], aw = 0.35;
+  ["方向", "確かめる仮説", "最初の小さな実験", "続ける条件"].forEach((h, i) => T(s, h, { x: cx[i], y: 1.55, w: cw[i], h: 0.3, fontSize: 13, color: C.muted, bold: true }));
+  const y0 = 1.9, rh = 0.74, gap = 0.12;
+  rows.forEach(([lab, tag, hyp, exp, cond], i) => {
+    const y = y0 + i * (rh + gap);
+    s.addShape(pptx.ShapeType.rect, { x: M, y, w: W, h: rh, fill: { color: i === 0 ? C.highlight : "F2F4F7" }, line: { color: i === 0 ? "E6C800" : "F2F4F7", width: 1 } });
+    T(s, tag ? [{ text: lab, options: { breakLine: true } }, { text: tag, options: { fontSize: 12, bold: false, color: "7A5200" } }] : lab,
+      { x: cx[0], y, w: cw[0], h: rh, fontSize: 16, bold: true, color: C.primary, valign: "middle" });
+    [hyp, exp, cond].forEach((t, j) => T(s, t, { x: cx[j + 1], y, w: cw[j + 1], h: rh, fontSize: 14, valign: "middle", lineSpacingMultiple: 1.1 }));
+    [cx[2] - aw - 0.02, cx[3] - aw - 0.02].forEach(ax => T(s, "→", { x: ax, y, w: aw, h: rh, fontSize: 20, bold: true, color: "8C8C8C", align: "center", valign: "middle" }));
+  });
   T(s, bullets([
     ["1週間ごとに「仮説 → 小さな実験 → 9つの認識器で確認 → 続ける／捨てる」を回す"],
-  ], { fontSize: 17 }), { x: M, y: 6.0, w: W, h: 0.45 });
-  cite(s, "確認はいつも同じ条件: 入力の違う認識器を含む9つ、話者単位の検定、悪化する認識器がないか");
+  ], { fontSize: 17 }), { x: M, y: 6.33, w: W, h: 0.35 });
+  cite(s, "確認はいつも同じ条件: 入力の違う認識器を含む9つ・話者単位の検定・悪化する認識器がないか");
   s.addNotes("【台本】（約50秒）\nそのうえで、生成モデルは候補の一つと位置づけて、仮説ごとに小さく試して絞り込んでいきます。\n\n最初に回すのはAの分析です。すでにある全ての出力で、自然な声との距離と、9つの認識器の誤りの関係を見ます。新しい学習がいらないので数日で結論が出ます。関係がはっきりすれば、これが研究の柱、設計原理になります。\n\nBからEも、並行して小さく試します。\n\n1週間ごとに、仮説、小さな実験、9つの認識器での確認、続けるか捨てるか、を回していきます。以上です。\n\n【補足】自然な声との距離の候補: 自己教師あり音声モデル（WavLM など）の内部表現での、同じ発話の気導音との距離、または気導音全体の分布との距離（FAD 型）。「続ける条件」は目安で、ゴールの基準に照らして判断する。");
 }
 
