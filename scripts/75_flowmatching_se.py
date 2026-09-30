@@ -59,15 +59,19 @@ def fetch_examples():
             print(f'fetched {rel}')
     # 既定の init_from_nemo_model: null があると初期化指定が2つとみなされるので、事前学習モデルに置き換える
     conf = EXAMPLES / 'conf' / 'flow_matching_generative_finetuning.yaml'
-    conf.write_text(conf.read_text().replace('init_from_nemo_model: null',
-                                             f'init_from_pretrained_model: {PRETRAINED}'))
+    txt = conf.read_text()
+    txt = txt.replace('init_from_nemo_model: null', f'init_from_pretrained_model: {PRETRAINED}')
+    conf.write_text(txt)
+    (EXAMPLES / 'conf' / 'flow_matching_scratch.yaml').write_text(   # 対照: 同じ構造を初期値ランダムで学習
+        txt.replace(f'init_from_pretrained_model: {PRETRAINED}', 'init_from_nemo_model: null'))
 
 
 def train(args):
     fetch_examples()
     exp = BASE_DIR / 'checkpoints' / args.tag
     cmd = [sys.executable, str(EXAMPLES / 'audio_to_audio_train.py'),
-           f'--config-path={EXAMPLES / "conf"}', '--config-name=flow_matching_generative_finetuning',
+           f'--config-path={EXAMPLES / "conf"}',
+           '--config-name=' + ('flow_matching_scratch' if args.scratch else 'flow_matching_generative_finetuning'),
            f'model.train_ds.manifest_filepath={WORK / "train.json"}',
            f'model.validation_ds.manifest_filepath={WORK / "dev100.json"}',
            '~model.log_config',
@@ -140,6 +144,7 @@ def main():
     ap.add_argument('--nemo', default='', help='.nemo のパス（省略時は checkpoints/<tag> の最新）')
     ap.add_argument('--out', default='', help='出力名（省略時は tag）')
     ap.add_argument('--limit', type=int, default=0)
+    ap.add_argument('--scratch', action='store_true', help='事前学習なし（初期値ランダム）で学習する対照')
     args = ap.parse_args()
     {'manifest': lambda: manifest(), 'train': lambda: train(args), 'infer': lambda: infer(args)}[args.stage]()
 
