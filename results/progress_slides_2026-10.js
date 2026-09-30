@@ -27,7 +27,7 @@ const bullets = (items, base = {}) => items.map((it, i) => {
 {
   const s = newSlide();
   T(s, "喉マイクの音声を\n「どの音声認識でも読める音」に直す", { x: M, y: 2.2, w: W, h: 1.9, fontSize: 38, bold: true, color: C.primary, lineSpacingMultiple: 1.15 });
-  T(s, "生成モデルの予備実験・関連研究・課題・今後の方針", { x: M, y: 4.25, w: W, h: 0.5, fontSize: 20, color: C.body });
+  T(s, "生成モデルの予備実験・課題・今後の方針", { x: M, y: 4.25, w: W, h: 0.5, fontSize: 20, color: C.body });
   T(s, "春日 裕次　ゼミ進捗報告　2026年10月1日", { x: M, y: 5.0, w: W, h: 0.4, fontSize: 16, color: C.muted });
   s.addNotes("【台本】（約10秒）\n進捗を報告します。今日は、予備実験の結果と課題、これからの方針を中心に話します。");
 }
@@ -59,35 +59,39 @@ const bullets = (items, base = {}) => items.map((it, i) => {
   s.addNotes("【台本】（約50秒）\n喉マイクは騒音に強い一方、こもった音になるので、音声認識の誤りが多くなります。そこで、認識の前に音を直す「音声強調」を研究しています。\n\n卒論では、Whisperが正しく書き起こせるように音声強調を学習しました。Whisperや、Whisperと同じ入力を使う認識器では誤りが15%ほど減りましたが、入力の作りが違う認識器では、逆に26〜46%増えました。\n\nそこで目標を、クラウドのような作り直せない認識器にも使える、どの音声認識でも誤りが減る前処理にしました。\n\n【補足】数値は CE-SE（λ=10）の TAPS SE-Conformer 比（test、句読点除去CER）。MMS はほぼ±0。");
 }
 
-// 2b. 試したアプローチの一覧
+// 3. 方法（生成モデルの調整）
 {
   const s = newSlide();
-  title(s, "6つの方法のうち、どの認識器でも大きく効いたのは生成モデルだけ");
-  const hdr = (t) => ({ text: t, options: { bold: true, color: C.primary, fontSize: 16, border: [{ type: "none" }, { type: "none" }, { pt: 1.5, color: C.primary }, { type: "none" }] } });
-  const cell = (t, o = {}) => ({ text: t, options: { fontSize: 16, color: C.body, border: [{ type: "none" }, { type: "none" }, { pt: 0.75, color: C.rule }, { type: "none" }], ...o } });
-  const ng = (t) => cell(t, { color: C.alert });
-  s.addTable([
-    [hdr("方法"), hdr("考え方"), hdr("どの認識器でも効いたか")],
-    [cell("普通のマイク向けの音声強調"), cell("既存の雑音除去をそのまま使う"), ng("✕ 誤りが増えた（卒論前半）")],
-    [cell("Whisperに合わせて学習"), cell("Whisperが読みやすい音にする"), ng("△ Whisper系だけ改善、他は悪化")],
-    [cell("複数の認識器に合わせて学習"), cell("入力の違う認識器にも合わせる"), ng("✕ 学習に使っていない認識器で悪化")],
-    [cell("4つの音声強調の出力を平均"), cell("各手法の癖を打ち消す（重い）"), cell("○ 全9つで改善（−3〜−14%）")],
-    [cell("特徴を普通のマイクに近づける"), cell("認識器に頼らない（Sato ら型）"), cell("○ 調べた4つで改善（−7〜−13%）")],
-    [cell("生成モデルを調整", { bold: true, color: C.primary }), cell("音そのものを作り直す", { bold: true, color: C.primary }), cell("◎ 全9つで −15〜−24%", { bold: true, color: C.primary })],
-  ], { x: M, y: 1.65, w: W, colW: [3.5, 4.1, W - 7.6], fontFace: FONT, rowH: 0.66, valign: "middle", margin: [4, 8, 4, 8] });
-  cite(s, "％は元の音声強調（TAPS SE-Conformer）と比べた文字誤り率の相対変化。Sato ら型は開発データ、その他はテストデータの結果で、条件はまだそろっていない");
-  s.addNotes("【台本】（約40秒）\nここまでに試した方法をまとめます。普通のマイク向けの音声強調をそのまま使うと誤りが増え、Whisperに合わせて学習するとWhisper系だけ、複数の認識器に合わせても、学習に使っていない認識器ではやはり悪化しました。\n\n認識器に頼らない方法として、4つの音声強調の出力を平均する方法と、先行研究の方法は、どの認識器でも改善しましたが、改善は小さめでした。\n\nその中で、生成モデルを調整した方法だけが、全部の認識器で大きく改善しました。次で詳しく見ます。\n\n【補足】4つの平均：TAPS SE-Conformer・Demucs・TSTNN・再構成のみで再学習したSEの振幅を平均（推論は約1秒/発話と重い）。複数の認識器に合わせる：Whisper の損失＋XLS-R の損失で学習し、Zipformer で +9〜15%。Sato ら型：WavLM の内部表現を普通のマイクの音に近づける損失。");
+  title(s, "そこで、音声認識を使わず、生成モデルで音そのものを作り直す");
+  const steps = [
+    ["① 事前学習済みモデル", "NVIDIA 公開。大量の英語音声（約6万時間）で、隠した部分を描き直す練習をしたモデル"],
+    ["② 喉マイク用に調整", "本研究。TAPS の同時録音 4,000組で、喉マイクの音から普通のマイクの音を描くよう追加学習"],
+    ["③ 使うとき", "ランダムな状態から、喉マイクの音を手がかりに20段階で描き直す → 各認識器へ"],
+  ];
+  const bw = 3.55, gap = 0.5; let x = M;
+  steps.forEach(([h, b], i) => {
+    s.addShape(pptx.ShapeType.rect, { x, y: 1.75, w: bw, h: 2.2, fill: { color: C.bg }, line: { color: i === 1 ? C.primary : C.rule, width: i === 1 ? 2 : 1 } });
+    T(s, h, { x: x + 0.2, y: 1.95, w: bw - 0.4, h: 0.45, fontSize: 18, bold: true, color: C.primary });
+    T(s, b, { x: x + 0.2, y: 2.5, w: bw - 0.4, h: 1.5, fontSize: 16, lineSpacingMultiple: 1.25 });
+    if (i < steps.length - 1) s.addShape(pptx.ShapeType.rightArrow, { x: x + bw + 0.1, y: 2.75, w: 0.3, h: 0.32, fill: { color: "A6A6A6" }, line: { color: "A6A6A6" } });
+    x += bw + gap;
+  });
+  T(s, bullets([
+    [{ b: "音声認識を学習に一切使わない" }, " → 特定の認識器に合わせ込まない"],
+    [{ b: "欠けた高い音や子音" }, "も、事前学習で覚えた「自然な声」から補える"],
+  ], { fontSize: 20 }), { x: M, y: 4.55, w: W, h: 1.4, paraSpaceAfter: 14 });
+  cite(s, "生成モデル: NVIDIA NeMo flow matching（4.3億パラメータ、Ku et al., arXiv:2409.16117）。元の音声強調は1200万パラメータ");
+  s.addNotes("【台本】（約50秒）\nそこで、音声認識を一切使わない方法として、生成モデルを使いました。\n\n（左）NVIDIAが公開している、大量の音声で事前学習されたモデルです。音の一部を隠して描き直す練習をしていて、自然な声がどういう形かを知っています。\n\n（中央）これを、TAPSの同時録音4,000組で、喉マイクの音から普通のマイクの音を描くように追加学習しました。\n\n（右）使うときは、ランダムな状態から出発して、喉マイクの音を手がかりに20段階で少しずつ描き直します。\n\n音声認識を使わないので特定の認識器に合わせ込まず、喉マイクで欠けている高い音や子音も、事前学習で覚えた自然な声から補えるのが狙いです。\n\n【補足】画像生成AIと同じ仕組み（flow matching）。ランダムな出発点を変えると毎回少し違う音になる。学習の損失は生成モデル本来のもの（ASR損失なし）。fp32、2万ステップ、約8.5時間。");
 }
 
-// 3. 結果（生成モデル）
+// 4. 結果（生成モデル）
 {
   const s = newSlide();
   title(s, "生成モデルの調整で、9つの音声認識すべての誤りが減った");
   const rows = [["Zipformer", 54.2, 45.1], ["MMS-1B", 35.0, 29.7], ["Whisper-base", 27.3, 21.8], ["Whisper-small", 23.0, 18.0], ["XLS-R", 22.2, 16.9],
                 ["Whisper-medium", 19.6, 15.9], ["Whisper-large-v3-turbo", 17.0, 13.7], ["Whisper（喉マイクで再学習）", 14.6, 11.0], ["Qwen3-ASR", 13.6, 10.4]];
-  T(s, "狙い：特定の認識器に合わせず、音そのものを直す（音声認識は学習に使わない）", { x: M, y: 1.3, w: W, h: 0.4, fontSize: 18, color: C.muted });
   const diffInput = new Set(["Zipformer", "MMS-1B", "XLS-R"]);
-  const lw = 3.0, cx = M + lw + 0.15, cw = 4.4, sc = cw / 60, y0 = 2.3, rh = 0.46;
+  const lw = 3.0, cx = M + lw + 0.15, cw = 4.4, sc = cw / 60, y0 = 1.95, rh = 0.46;
   [0, 20, 40, 60].forEach(v => {
     s.addShape(pptx.ShapeType.line, { x: cx + v * sc, y: y0 - 0.1, w: 0, h: rows.length * rh + 0.05, line: { color: C.grid, width: 1 } });
     T(s, `${v}%`, { x: cx + v * sc - 0.35, y: y0 + rows.length * rh + 0.02, w: 0.7, h: 0.3, fontSize: 14, color: C.muted, align: "center" });
@@ -100,36 +104,17 @@ const bullets = (items, base = {}) => items.map((it, i) => {
     s.addShape(pptx.ShapeType.ellipse, { x: cx + b * sc - 0.1, y: y + 0.05, w: 0.2, h: 0.2, fill: { color: C.primary }, line: { color: C.primary } });
   });
   T(s, [{ text: "●", options: { color: "A6A6A6" } }, { text: " 元の音声強調　", options: {} }, { text: "●", options: { color: C.primary } }, { text: " 生成モデル　（文字の誤り率）", options: {} }],
-    { x: cx - 0.3, y: 1.85, w: 5.5, h: 0.35, fontSize: 14, color: C.muted });
+    { x: cx - 0.3, y: 1.45, w: 5.5, h: 0.35, fontSize: 14, color: C.muted });
   s.addShape(pptx.ShapeType.roundRect, { x: cx + 2.3, y: y0 + 3 * rh, w: 1.95, h: 0.85, fill: { color: C.highlight }, line: { color: "E6C800", width: 1 }, rectRadius: 0.06 });
   T(s, "全9つで\n相対15〜24%減", { x: cx + 2.3, y: y0 + 3 * rh, w: 1.95, h: 0.85, fontSize: 16, bold: true, color: "7A5200", align: "center", valign: "middle" });
   const rx = M + 7.95;
   T(s, bullets([
-    [{ b: "音声を作るAI" }, "（大量の音声で事前学習済み）を、喉マイク用に同時録音で調整"],
+    ["Whisper系でも、", { b: "Whisperに合わせた音声強調より良い" }],
     [{ b: "入力が違う認識器", c: C.accent }, "でも改善"],
     ["テスト話者", { b: "10人全員" }, "で改善"],
-  ], { fontSize: 20 }), { x: rx, y: 2.2, w: W - 7.95, h: 4.6, paraSpaceAfter: 18, lineSpacingMultiple: 1.2 });
+  ], { fontSize: 20 }), { x: rx, y: 1.9, w: W - 7.95, h: 4.6, paraSpaceAfter: 18, lineSpacingMultiple: 1.2 });
   cite(s, "生成は毎回少し変わるが、今はテストデータで1回生成した分のみ（再確認中）。生成モデル: NVIDIA NeMo（Ku et al., arXiv:2409.16117）");
-  s.addNotes("【台本】（約60秒）\n今回一番よかったのが、大量の音声で事前に学習された「音声を作るAI」、生成モデルを、喉マイクと普通のマイクの同時録音で調整したものです。音声認識は学習に一切使っていません。\n\n（図を指して）これは9つの音声認識の文字の誤り率で、灰色が元の音声強調、紺色が生成モデルです。すべての認識器で誤りが15〜24%減り、テストの10人全員で改善しました。ただし、この結果はテストデータで1回生成した分だけで、再現性は確認中です。\n\n【想定質問】\nQ. 作り話（ありもしない内容）をしていないか？\nA. Whisper-smallで確認した範囲では、崩れた発話は0、出力の長さも変わらず、置き換え・挿入の誤りはむしろ減っている。\nQ. Qwen3＋生成モデル（10.4%）は、学習し直したWhisper（SEなし13.8%）より良いのでは？\nA. Qwen3は元の音声強調でも13.6%で、差の大半は認識器の強さ。公平に言えるのは「学習し直したWhisper自身も13.8→11.0%に下がる」こと。\nQ. 元の音声強調とは？\nA. TAPSデータセットの論文で公開されている SE-Conformer（1200万パラメータ）。\nQ. ほかの方法は？\nA. 複数の認識器の損失で学習 → 学習外の Zipformer で悪化。Sato ら型（WavLM 表現の損失）→ 開発データの4認識器で −7〜−13%（同じ条件での比較はこれから）。");
-}
-
-// 4. 関連研究
-{
-  const s = newSlide();
-  title(s, "聞こえを良くする研究はあるが、どの認識器でも効くかは未確認");
-  const hdr = (t) => ({ text: t, options: { bold: true, color: C.primary, fontSize: 16, border: [{ type: "none" }, { type: "none" }, { pt: 1.5, color: C.primary }, { type: "none" }] } });
-  const cell = (t, o = {}) => ({ text: t, options: { fontSize: 15, color: C.body, border: [{ type: "none" }, { type: "none" }, { pt: 0.75, color: C.rule }, { type: "none" }], ...o } });
-  s.addTable([
-    [hdr("研究"), hdr("対象"), hdr("目的"), hdr("音声認識の誤り")],
-    [cell("山中ら（東大 2026）"), cell("喉マイク（韓国語・日本語）"), cell("普通のマイクらしい音に変換"), cell("どの方法でも増加", { color: C.alert, bold: true })],
-    [cell("Sato ら（2025）"), cell("普通のマイクの雑音"), cell("認識器に頼らない音声強調"), cell("複数の認識器で減少")],
-    [cell("本研究", { bold: true, color: C.primary }), cell("喉マイク（韓国語）"), cell("どの認識器でも誤りを減らす"), cell("9つすべてで減少\n（入力の違う認識器も）", { bold: true, color: C.primary })],
-  ], { x: M, y: 1.75, w: W, colW: [2.6, 3.3, 3.4, W - 9.3], fontFace: FONT, rowH: 0.75, valign: "middle", margin: [4, 8, 4, 8] });
-  T(s, bullets([
-    ["山中らの方が進んでいる点：", { b: "別の喉マイク・日本語でも検証" }, "、同時録音のデータが不要"],
-  ], { fontSize: 20 }), { x: M, y: 5.2, w: W, h: 0.9 });
-  cite(s, "山中ら: 日本音響学会 2026年秋 1-Q-42（誤り率の基準が本研究と異なる）／Sato et al., arXiv:2507.07631");
-  s.addNotes("【台本】（約60秒）\n関連研究です。一番近いのは、今回の音響学会で東大の山中さんたちが発表した研究で、同じTAPSのデータを使っています。声質変換などで喉マイクの音を普通のマイクの音に近づけていて、聞こえは良くなりますが、音声認識の誤りはどの方法でも増えていました。一方、向こうは別の喉マイクや日本語でも確かめていて、同時録音のデータも要りません。ここは私に足りない点です。\n\n喉マイクで、入力の違う複数の音声認識で誤りが減るかを確かめた例は、調べた範囲では見当たりません。\n\n【補足】山中ら：無処理0.233、Sidon 0.308、Kanade(ft) 0.550。和田ら（神戸大・三菱電機）：喉マイクの感情認識でも汎用の雑音除去で悪化。");
+  s.addNotes("【台本】（約60秒）\n結果です。（図を指して）これは9つの音声認識の文字の誤り率で、灰色が元の音声強調、紺色が生成モデルです。すべての認識器で誤りが15〜24%減り、テストの10人全員で改善しました。入力の違う認識器でも減っていて、Whisper系でも、卒論のWhisperに合わせた音声強調より良い結果です。ただし、この結果はテストデータで1回生成した分だけで、再現性は確認中です。\n\n【想定質問】\nQ. 作り話（ありもしない内容）をしていないか？\nA. Whisper-smallで確認した範囲では、崩れた発話は0、出力の長さも変わらず、置き換え・挿入の誤りはむしろ減っている。\nQ. Qwen3＋生成モデル（10.4%）は、学習し直したWhisper（SEなし13.8%）より良いのでは？\nA. Qwen3は元の音声強調でも13.6%で、差の大半は認識器の強さ。公平に言えるのは「学習し直したWhisper自身も13.8→11.0%に下がる」こと。\nQ. 元の音声強調とは？\nA. TAPSデータセットの論文で公開されている SE-Conformer（1200万パラメータ）。\nQ. ほかの方法は？\nA. 複数の認識器の損失で学習 → 学習外の Zipformer で悪化。Sato ら型（WavLM 表現の損失）→ 開発データの4認識器で −7〜−13%（同じ条件での比較はこれから）。");
 }
 
 // 5. 課題
@@ -137,7 +122,7 @@ const bullets = (items, base = {}) => items.map((it, i) => {
   const s = newSlide();
   title(s, "効果は大きいが、理由・確かさ・他のデータでの効果・新しさが課題");
   const items = [["① なぜ効いたか", "事前学習のおかげか、単にモデルが大きい（約35倍）からか"],
-                 ["② 結果は確かか", "1回生成しただけ。Sato らの方法との同条件比較もまだ"],
+                 ["② 結果は確かか", "1回生成しただけ。他の方法との同じ条件での比較もまだ"],
                  ["③ 他のデータでも効くか", "1つのデータセット（韓国語 TAPS）でしか確かめていない"],
                  ["④ 自分の工夫はどこか", "公開モデルを調整しただけ（計算も重い）"]];
   items.forEach(([h, b], i) => {
@@ -167,7 +152,7 @@ const bullets = (items, base = {}) => items.map((it, i) => {
   s.addNotes("【台本】（約55秒）\nこれからの方針です。\n\nまず、課題①②の確認として、事前学習なしの同じモデルと比べ、生成し直しや開発データ、別のデータセットでも同じ結果になるかを確かめます。\n\nそのうえで中心にしたいのが、認識に向いた生成のさせ方です。今は、砂嵐のようなランダムな状態から1回だけ描き直していて、描くたびに少しずつ違う音になります。誤りが増えた発話も、音の取り違えでした。そこで、何回か生成して平均したり、互いに一番似た候補を選んだり、砂嵐ではなく元の音声強調の出力から描き始めたりして、内容を取り違えにくくします。どれも今のモデルのまま、認識器を使わずに試せます。\n\n最後に、見つけた出し方の出力を正解にして、軽い音声強調へ蒸留し、実用的な速さにしたいと考えています。以上です。\n\n【補足】互いに一番似た候補を選ぶ＝最小ベイズリスク選択（類似度は認識器に依存しない音声特徴で測る）。蒸留の正解は、生成モデルが学習で見ていない喉マイク音声（VibraVox のラベルなし約9時間）で作る（以前、学習データの丸暗記で蒸留が失敗したため）。VibraVox は結果の確認に使うだけで、マイクへの適応はしない。");
 }
 
-// 8. 参考文献（付録）
+// 7. 参考文献（付録）
 {
   const s = newSlide();
   title(s, "参考文献");
@@ -179,6 +164,45 @@ const bullets = (items, base = {}) => items.map((it, i) => {
     "Sato et al., “Generic speech enhancement with self-supervised representation space loss,” arXiv:2507.07631, 2025.",
     "J. Hauret et al., “Vibravox: A dataset of French speech captured with body-conduction audio sensors,” Speech Communication, 2025.",
   ], { fontSize: 14 }), { x: M, y: 1.6, w: W, h: 5.0, paraSpaceAfter: 10 });
+}
+
+// 付録A. 試したアプローチの一覧
+{
+  const s = newSlide();
+  title(s, "付録：試した6つの方法と結果");
+  const hdr = (t) => ({ text: t, options: { bold: true, color: C.primary, fontSize: 16, border: [{ type: "none" }, { type: "none" }, { pt: 1.5, color: C.primary }, { type: "none" }] } });
+  const cell = (t, o = {}) => ({ text: t, options: { fontSize: 16, color: C.body, border: [{ type: "none" }, { type: "none" }, { pt: 0.75, color: C.rule }, { type: "none" }], ...o } });
+  const ng = (t) => cell(t, { color: C.alert });
+  s.addTable([
+    [hdr("方法"), hdr("考え方"), hdr("どの認識器でも効いたか")],
+    [cell("普通のマイク向けの音声強調"), cell("既存の雑音除去をそのまま使う"), ng("✕ 誤りが増えた（卒論前半）")],
+    [cell("Whisperに合わせて学習"), cell("Whisperが読みやすい音にする"), ng("△ Whisper系だけ改善、他は悪化")],
+    [cell("複数の認識器に合わせて学習"), cell("入力の違う認識器にも合わせる"), ng("✕ 学習に使っていない認識器で悪化")],
+    [cell("4つの音声強調の出力を平均"), cell("各手法の癖を打ち消す（重い）"), cell("○ 全9つで改善（−3〜−14%）")],
+    [cell("特徴を普通のマイクに近づける"), cell("認識器に頼らない（Sato ら型）"), cell("○ 調べた4つで改善（−7〜−13%）")],
+    [cell("生成モデルを調整", { bold: true, color: C.primary }), cell("音そのものを作り直す", { bold: true, color: C.primary }), cell("◎ 全9つで −15〜−24%", { bold: true, color: C.primary })],
+  ], { x: M, y: 1.65, w: W, colW: [3.5, 4.1, W - 7.6], fontFace: FONT, rowH: 0.66, valign: "middle", margin: [4, 8, 4, 8] });
+  cite(s, "％は元の音声強調（TAPS SE-Conformer）と比べた文字誤り率の相対変化。Sato ら型は開発データ、その他はテストデータの結果で、条件はまだそろっていない");
+  s.addNotes("【台本】（約40秒）\nここまでに試した方法をまとめます。普通のマイク向けの音声強調をそのまま使うと誤りが増え、Whisperに合わせて学習するとWhisper系だけ、複数の認識器に合わせても、学習に使っていない認識器ではやはり悪化しました。\n\n認識器に頼らない方法として、4つの音声強調の出力を平均する方法と、先行研究の方法は、どの認識器でも改善しましたが、改善は小さめでした。\n\nその中で、生成モデルを調整した方法だけが、全部の認識器で大きく改善しました。次で詳しく見ます。\n\n【補足】4つの平均：TAPS SE-Conformer・Demucs・TSTNN・再構成のみで再学習したSEの振幅を平均（推論は約1秒/発話と重い）。複数の認識器に合わせる：Whisper の損失＋XLS-R の損失で学習し、Zipformer で +9〜15%。Sato ら型：WavLM の内部表現を普通のマイクの音に近づける損失。");
+}
+
+// 付録B. 関連研究
+{
+  const s = newSlide();
+  title(s, "付録：関連研究");
+  const hdr = (t) => ({ text: t, options: { bold: true, color: C.primary, fontSize: 16, border: [{ type: "none" }, { type: "none" }, { pt: 1.5, color: C.primary }, { type: "none" }] } });
+  const cell = (t, o = {}) => ({ text: t, options: { fontSize: 15, color: C.body, border: [{ type: "none" }, { type: "none" }, { pt: 0.75, color: C.rule }, { type: "none" }], ...o } });
+  s.addTable([
+    [hdr("研究"), hdr("対象"), hdr("目的"), hdr("音声認識の誤り")],
+    [cell("山中ら（東大 2026）"), cell("喉マイク（韓国語・日本語）"), cell("普通のマイクらしい音に変換"), cell("どの方法でも増加", { color: C.alert, bold: true })],
+    [cell("Sato ら（2025）"), cell("普通のマイクの雑音"), cell("認識器に頼らない音声強調"), cell("複数の認識器で減少")],
+    [cell("本研究", { bold: true, color: C.primary }), cell("喉マイク（韓国語）"), cell("どの認識器でも誤りを減らす"), cell("9つすべてで減少\n（入力の違う認識器も）", { bold: true, color: C.primary })],
+  ], { x: M, y: 1.75, w: W, colW: [2.6, 3.3, 3.4, W - 9.3], fontFace: FONT, rowH: 0.75, valign: "middle", margin: [4, 8, 4, 8] });
+  T(s, bullets([
+    ["山中らの方が進んでいる点：", { b: "別の喉マイク・日本語でも検証" }, "、同時録音のデータが不要"],
+  ], { fontSize: 20 }), { x: M, y: 5.2, w: W, h: 0.9 });
+  cite(s, "山中ら: 日本音響学会 2026年秋 1-Q-42（誤り率の基準が本研究と異なる）／Sato et al., arXiv:2507.07631");
+  s.addNotes("【台本】（約60秒）\n関連研究です。一番近いのは、今回の音響学会で東大の山中さんたちが発表した研究で、同じTAPSのデータを使っています。声質変換などで喉マイクの音を普通のマイクの音に近づけていて、聞こえは良くなりますが、音声認識の誤りはどの方法でも増えていました。一方、向こうは別の喉マイクや日本語でも確かめていて、同時録音のデータも要りません。ここは私に足りない点です。\n\n喉マイクで、入力の違う複数の音声認識で誤りが減るかを確かめた例は、調べた範囲では見当たりません。\n\n【補足】山中ら：無処理0.233、Sidon 0.308、Kanade(ft) 0.550。和田ら（神戸大・三菱電機）：喉マイクの感情認識でも汎用の雑音除去で悪化。");
 }
 
 pptx.writeFile({ fileName: __dirname + "/progress_slides_2026-10.pptx" }).then(f => console.log("wrote", f));
