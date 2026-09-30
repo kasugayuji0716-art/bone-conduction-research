@@ -187,7 +187,7 @@ const bullets = (items, base = {}) => items.map((it, i) => {
   const s = newSlide();
   title(s, "最終ゴール：どの認識器でも効く前処理と、その設計原理");
   T(s, "最終ゴール（修士）", { x: M, y: 1.6, w: 6.0, h: 0.45, fontSize: 20, bold: true, color: C.primary });
-  T(s, "どの認識器でも誤りが減る喉マイク用の前処理を作り、\nなぜ効くかを示す（認識器の重みは変えない）",
+  T(s, "どの認識器でも誤りが減る喉マイク用の前処理を作る\nなぜ効くのかを示す\n（認識器の重みは変えない）",
     { x: M, y: 2.1, w: 6.0, h: 1.2, fontSize: 18, lineSpacingMultiple: 1.25 });
   T(s, "達成の基準", { x: M, y: 3.45, w: 6.0, h: 0.4, fontSize: 18, bold: true, color: C.primary });
   T(s, bullets([
