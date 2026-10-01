@@ -88,6 +88,8 @@ def train(args):
            f'exp_manager.exp_dir={exp}', f'exp_manager.name={args.tag}',
            'exp_manager.early_stopping_callback_params.patience=1000',
            'exp_manager.checkpoint_callback_params.save_top_k=1']   # 1つ約5GB（最適化状態込み）
+    if args.resume:   # 中断した学習をチェックポイント（*-last.ckpt）から続ける
+        cmd.append(f'exp_manager.resume_from_checkpoint={args.resume}')
     print(' '.join(cmd), flush=True)
     subprocess.run(cmd, check=True)
 
@@ -155,6 +157,7 @@ def main():
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--n_avg', type=int, default=1, help='N個のサンプルを振幅平均')
+    ap.add_argument('--resume', default='', help='続きから学習するチェックポイント（*-last.ckpt）')
     ap.add_argument('--scratch', action='store_true', help='事前学習なし（初期値ランダム）で学習する対照')
     args = ap.parse_args()
     {'manifest': lambda: manifest(), 'train': lambda: train(args), 'infer': lambda: infer(args)}[args.stage]()
