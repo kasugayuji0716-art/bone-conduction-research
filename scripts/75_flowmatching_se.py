@@ -89,7 +89,7 @@ def train(args):
            'exp_manager.early_stopping_callback_params.patience=1000',
            'exp_manager.checkpoint_callback_params.save_top_k=1']   # 1つ約5GB（最適化状態込み）
     if args.resume:   # 中断した学習をチェックポイント（*-last.ckpt）から続ける
-        cmd.append(f'exp_manager.resume_from_checkpoint={args.resume}')
+        cmd.append(f"exp_manager.resume_from_checkpoint='{Path(args.resume).resolve()}'")   # ファイル名の = を Hydra が誤解しないよう引用
     print(' '.join(cmd), flush=True)
     subprocess.run(cmd, check=True)
 
