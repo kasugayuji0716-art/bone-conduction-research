@@ -15,6 +15,7 @@ venv-nemo（nemo_toolkit[audio]）で実行する。
 import argparse
 import csv
 import json
+import os
 import subprocess
 import sys
 import urllib.request
@@ -91,7 +92,10 @@ def train(args):
     if args.resume:   # 中断した学習をチェックポイント（*-last.ckpt）から続ける
         cmd.append(f"exp_manager.resume_from_checkpoint='{Path(args.resume).resolve()}'")   # ファイル名の = を Hydra が誤解しないよう引用
     print(' '.join(cmd), flush=True)
-    subprocess.run(cmd, check=True)
+    env = dict(os.environ)
+    if args.resume:   # 自前のチェックポイント。NeMo の EMA コールバックが weights_only=True で読めないため
+        env['TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD'] = '1'
+    subprocess.run(cmd, check=True, env=env)
 
 
 def find_nemo(tag):
