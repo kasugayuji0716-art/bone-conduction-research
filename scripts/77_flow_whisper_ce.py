@@ -126,22 +126,27 @@ def train(args):
         if model.normalize_input:
             wav = model._denormalize(wav, scale)
         wav = wav[:, 0, :lens.max()]
-        enc = whisper.model.encoder(logmel(wav))
-        out['ce'] = whisper(encoder_outputs=(enc,), labels=labels(texts)).loss
+        with torch.autocast('cuda', dtype=torch.bfloat16):   # Whisper 側だけ bf16（生成モデルの複素 STFT は fp32 のまま）
+            enc = whisper.model.encoder(logmel(wav))
+            out['ce'] = whisper(encoder_outputs=(enc,), labels=labels(texts)).loss.float()
         return out
 
     log = open(ck / 'log.csv', 'a')
-    print(f'init={nemo_path.name} lam={args.lam} steps={args.steps} bs={args.batch_size} lr={args.lr}', flush=True)
+    print(f'init={nemo_path.name} lam={args.lam} steps={args.steps} bs={args.batch_size}x{args.accum} lr={args.lr} max_sec={args.max_sec}', flush=True)
+    opt.zero_grad()
     step = 0
     while step < args.steps:
         random.shuffle(train_rows)
         for i in range(0, len(train_rows) - args.batch_size + 1, args.batch_size):
             x, y, lens, texts = batch_of(train_rows[i:i + args.batch_size])
             l = losses(x, y, lens, texts)
-            loss = l['flow'] + args.lam * l['ce']
-            opt.zero_grad(); loss.backward()
+            loss = (l['flow'] + args.lam * l['ce']) / args.accum
+            loss.backward()
+            micro = (i // args.batch_size) + 1
+            if micro % args.accum:
+                continue
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.2)   # NeMo の設定と同じ
-            opt.step(); step += 1
+            opt.step(); opt.zero_grad(); step += 1
             if step % 50 == 0:
                 print(f'step {step}  flow={l["flow"].item():.4f}  ce={l["ce"].item():.3f}', flush=True)
             if step % args.eval_every == 0 or step == args.steps:
@@ -167,10 +172,11 @@ def main():
     ap.add_argument('--tag', default='fmce')
     ap.add_argument('--lam', type=float, default=0.1)
     ap.add_argument('--steps', type=int, default=4000)
-    ap.add_argument('--batch_size', type=int, default=4)
+    ap.add_argument('--batch_size', type=int, default=2)
+    ap.add_argument('--accum', type=int, default=2, help='勾配を何回分ためてから更新するか（実質バッチ = batch_size × accum）')
     ap.add_argument('--lr', type=float, default=1e-5)
     ap.add_argument('--t_min', type=float, default=0.5)
-    ap.add_argument('--max_sec', type=float, default=15.0)
+    ap.add_argument('--max_sec', type=float, default=12.0)
     ap.add_argument('--eval_every', type=int, default=1000)
     args = ap.parse_args()
     {'chain': chain, 'train': train}[args.stage](args)
