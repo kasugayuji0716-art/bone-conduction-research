@@ -112,7 +112,7 @@ def train(args):
         ye, _ = model.encoder(input=y, input_length=lens)
         x0 = torch.zeros_like(xe)
         out = {}
-        if not ce_only:
+        if not ce_only and not args.single_pass:
             t = flow.generate_time(batch_size=x.size(0)).to(DEVICE)
             pt = flow.sample(time=t, x_start=x0, x_end=ye)
             v, _ = model.estimator(input=torch.cat([pt, xe], dim=-3), input_length=xe_len, condition=t)
@@ -121,6 +121,8 @@ def train(args):
         tc = torch.empty(x.size(0), device=DEVICE).uniform_(args.t_min, 1.0)
         pc = flow.sample(time=tc, x_start=x0, x_end=ye)
         vc, _ = model.estimator(input=torch.cat([pc, xe], dim=-3), input_length=xe_len, condition=tc)
+        if not ce_only and args.single_pass:   # 同じ推定で生成モデル本来の損失も計算（推定器を1回だけ動かす）
+            out['flow'] = model.loss(estimate=vc, target=flow.vector_field(time=tc, x_start=x0, x_end=ye, point=pc), input_length=xe_len)
         x1 = pc + (1 - tc).view(-1, 1, 1, 1) * vc
         wav, _ = model.decoder(input=x1, input_length=xe_len)
         if model.normalize_input:
@@ -177,6 +179,7 @@ def main():
     ap.add_argument('--lr', type=float, default=1e-5)
     ap.add_argument('--t_min', type=float, default=0.5)
     ap.add_argument('--max_sec', type=float, default=12.0)
+    ap.add_argument('--single_pass', action='store_true', help='生成モデル本来の損失も CE と同じ時刻・同じ推定で計算する（約2倍速）')
     ap.add_argument('--eval_every', type=int, default=1000)
     args = ap.parse_args()
     {'chain': chain, 'train': train}[args.stage](args)
