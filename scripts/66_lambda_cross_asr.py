@@ -75,11 +75,13 @@ SETS = {'lambda': CONDS,
         'flow': ['taps', 'fm_taps'],
         # 生成のばらつき（シード）と N 個の振幅平均、事前学習なしの対照
         'flow_seed': ['taps', 'fm_taps', 'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4'],
-        'flow_var': ['taps', 'fm_taps', 'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch']}
+        'flow_var': ['taps', 'fm_taps', 'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch'],
+        # script 77: Whisper 系に特化（生成モデルの出力に Whisper 用 SE をかける／生成モデルを Whisper の CE で追加学習）
+        'whisper_spec': ['taps', 'ce10.0', 'fm_taps', 'fm_taps_avg4', 'fm_taps_avg4_ce100']}
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
               'distill_m4_med_vbx', 'distill_m4_med_vbx_mag',
               'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and', 'fm_taps',
-              'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch']
+              'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch', 'fm_taps_avg4_ce100']
 
 _WIN = torch.hann_window(512)
 

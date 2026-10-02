@@ -113,6 +113,9 @@ def infer(args):
     path = Path(args.nemo) if args.nemo else find_nemo(args.tag)
     print(f'model: {path}', flush=True)
     model = AudioToAudioModel.restore_from(str(path), map_location='cuda').eval()
+    if args.weights:   # script 77 で追加学習した重み（state_dict）を上書き
+        model.load_state_dict(torch.load(args.weights, map_location='cuda'))
+        print(f'weights: {args.weights}', flush=True)
     model.sampler.num_steps = args.steps
     out_dir = SE_WAV / (args.out or args.tag) / args.split
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -161,6 +164,7 @@ def main():
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--n_avg', type=int, default=1, help='N個のサンプルを振幅平均')
+    ap.add_argument('--weights', default='', help='script 77 などで追加学習した state_dict（.pt）')
     ap.add_argument('--resume', default='', help='続きから学習するチェックポイント（*-last.ckpt）')
     ap.add_argument('--scratch', action='store_true', help='事前学習なし（初期値ランダム）で学習する対照')
     args = ap.parse_args()
