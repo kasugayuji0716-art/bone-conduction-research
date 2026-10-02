@@ -77,11 +77,12 @@ SETS = {'lambda': CONDS,
         'flow_seed': ['taps', 'fm_taps', 'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4'],
         'flow_var': ['taps', 'fm_taps', 'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch'],
         # script 77: Whisper 系に特化（生成モデルの出力に Whisper 用 SE をかける／生成モデルを Whisper の CE で追加学習）
-        'whisper_spec': ['taps', 'ce10.0', 'fm_taps', 'fm_taps_avg4', 'fm_taps_avg4_ce100']}
+        'whisper_spec': ['taps', 'ce10.0', 'fm_taps', 'fm_taps_avg4', 'fm_taps_avg4_ce100'],
+        'whisper_fmce': ['taps', 'fm_taps', 'fmce_0.1', 'fmce_0.01']}
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
               'distill_m4_med_vbx', 'distill_m4_med_vbx_mag',
               'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and', 'fm_taps',
-              'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch', 'fm_taps_avg4_ce100']
+              'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch', 'fm_taps_avg4_ce100', 'fmce_0.1', 'fmce_0.01']
 
 _WIN = torch.hann_window(512)
 
