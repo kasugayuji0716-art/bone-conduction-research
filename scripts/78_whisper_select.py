@@ -59,21 +59,27 @@ def select(args):
 
 
 def fuse(args):
+    """生成モデルの出力と CE-SE の出力の振幅を (1−w):w で混ぜる（位相は生成モデル）。w=0.5 が fm_avg4_mavg_ce10"""
     s64 = import_module('64_retranscribe_all')
     s66 = import_module('66_lambda_cross_asr')
     ce = s66.load_any_se('ce10.0')
-    out = SE_WAV / 'fm_avg4_mavg_ce10' / args.split
+    name_out = args.out or ('fm_avg4_mavg_ce10' if (args.src, args.w) == ('fm_taps_avg4', 0.5) else f'{args.src}_mixce{args.w:g}')
+    out = SE_WAV / name_out / args.split
     out.mkdir(parents=True, exist_ok=True)
+    win = torch.hann_window(512)
     for s in s64.load_samples(args.split):
         name = f"{s['utt']}.wav"
         if (out / name).exists():
             continue
-        gen, sr = sf.read(SE_WAV / 'fm_taps_avg4' / args.split / name, dtype='float32')
+        gen, sr = sf.read(SE_WAV / args.src / args.split / name, dtype='float32')
         x, _ = sf.read(s['path'], dtype='float32')
         with torch.no_grad():
             c = ce(torch.from_numpy(x)[None].cuda()).reshape(-1).cpu().numpy()
         n = min(len(gen), len(c))
-        sf.write(out / name, s66.mag_avg(gen[:n], c[:n]), sr)     # 位相は1つ目（生成モデル）
+        G = torch.stft(torch.from_numpy(gen[:n]), 512, 128, window=win, return_complex=True)
+        C = torch.stft(torch.from_numpy(c[:n]), 512, 128, window=win, return_complex=True)
+        Y = ((1 - args.w) * G.abs() + args.w * C.abs()) * torch.exp(1j * G.angle())
+        sf.write(out / name, torch.istft(Y, 512, 128, window=win, length=n).numpy().astype(np.float32), sr)
     print(f'done → {out}')
 
 
@@ -81,6 +87,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('stage', choices=['select', 'fuse'])
     ap.add_argument('--split', default='test')
+    ap.add_argument('--src', default='fm_taps_avg4', help='fuse: 生成モデル側の出力')
+    ap.add_argument('--w', type=float, default=0.5, help='fuse: CE-SE 側の重み')
+    ap.add_argument('--out', default='')
     args = ap.parse_args()
     {'select': select, 'fuse': fuse}[args.stage](args)
 
