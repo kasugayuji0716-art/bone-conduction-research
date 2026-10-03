@@ -81,11 +81,14 @@ SETS = {'lambda': CONDS,
         'whisper_fmce': ['taps', 'fm_taps', 'fmce_0.1', 'fmce_0.01'],
         'whisper_diag': ['taps', 'fm_taps', 'fmce_0.1', 'fmce_0.01', 'fmce_sp0', 'fmce_2p0.1'],
         # script 78: 推論時の工夫（Whisper-small の自信度で選ぶ／生成モデルと Whisper 用 SE の振幅平均）
-        'whisper_infer': ['taps', 'ce10.0', 'fm_taps', 'fm_taps_avg4', 'fm_sel_conf', 'fm_avg4_mavg_ce10']}
+        'whisper_infer': ['taps', 'ce10.0', 'fm_taps', 'fm_taps_avg4', 'fm_sel_conf', 'fm_avg4_mavg_ce10'],
+        # script 79: 実際の生成出力に Whisper の損失（後段モジュール / DRaFT-K）と、その対照（dev で λ=0）
+        'whisper_real': ['taps', 'fm_taps', 'fm_taps_avg4', 'fm_post_ce', 'fm_avg4_post_ce', 'fm_draft_k1', 'fm_draft_lam0']}
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
               'distill_m4_med_vbx', 'distill_m4_med_vbx_mag',
               'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and', 'fm_taps',
-              'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch', 'fm_taps_avg4_ce100', 'fmce_0.1', 'fmce_0.01', 'fmce_sp0', 'fmce_2p0.1', 'fm_sel_conf', 'fm_avg4_mavg_ce10']
+              'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch', 'fm_taps_avg4_ce100', 'fmce_0.1', 'fmce_0.01', 'fmce_sp0', 'fmce_2p0.1', 'fm_sel_conf', 'fm_avg4_mavg_ce10',
+              'fm_post_ce', 'fm_avg4_post_ce', 'fm_draft_k1', 'fm_draft_lam0']
 
 _WIN = torch.hann_window(512)
 
