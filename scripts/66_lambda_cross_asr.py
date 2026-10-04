@@ -89,7 +89,9 @@ SETS = {'lambda': CONDS,
         # script 80: 相補学習（融合後の音に CE）と対照（dev で CE-SE を追加学習しただけ）。どちらも推論は生成4平均と半々で融合
         'comp': ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_avg4_comp_ce10', 'fm_avg4_devce10'],
         # 相補学習のやり直し: 学習も test と同じく生成4サンプル平均と混ぜる
-        'comp2': ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_avg4_comp2_ce10']}
+        'comp2': ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_avg4_comp2_ce10'],
+        # 比較対象を test・全認識器でそろえる（SSL-MSE = Sato et al. 2025 型）
+        'baselines': ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10']}
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
               'distill_m4_med_vbx', 'distill_m4_med_vbx_mag',
               'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and', 'fm_taps',
