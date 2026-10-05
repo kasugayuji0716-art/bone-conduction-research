@@ -134,7 +134,7 @@ def feat(args):
             pooled[c].append(f[0][MID - 1].mean(0).cpu().numpy())
         if (i + 1) % 50 == 0:
             print(f'  {i + 1}/{len(samples)}', flush=True)
-    tag = '_trial' if args.limit else ''
+    tag = '_trial' if args.limit else (f'_{args.out_tag}' if args.out_tag else '')
     with open(OUT / f'metrics_utt{tag}.csv', 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
     np.savez(OUT / f'pooled{tag}.npz', **{k: np.stack(v) for k, v in pooled.items()})
@@ -151,7 +151,7 @@ def frechet(a, b):
 
 def analyze(args):
     from scipy.stats import spearmanr
-    tag = '_trial' if args.limit else ''
+    tag = '_trial' if args.limit else (f'_{args.out_tag}' if args.out_tag else '')
     m = defaultdict(lambda: defaultdict(list))
     for r in csv.DictReader(open(OUT / f'metrics_utt{tag}.csv', encoding='utf-8')):
         for k in ('d_hubert', 'd_mel'):
@@ -198,6 +198,7 @@ def main():
     ap.add_argument('stage', choices=['feat', 'analyze'])
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--conds', nargs='+')
+    ap.add_argument('--out_tag', default='', help='出力ファイル名に付ける印（全条件の結果を上書きしないため）')
     args = ap.parse_args()
     {'feat': feat, 'analyze': analyze}[args.stage](args)
 

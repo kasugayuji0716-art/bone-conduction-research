@@ -83,16 +83,48 @@ def fuse(args):
     print(f'done → {out}')
 
 
+def variants(args):
+    """融合の分解: (1) CE-SE の櫛状成分を除いてから融合 (2) 4 kHz 未満だけ混ぜる (3) 4 kHz 以上だけ混ぜる"""
+    s66 = import_module('66_lambda_cross_asr')
+    s62 = import_module('62_robustness_eval')
+    s64 = import_module('64_retranscribe_all')
+    ce = s66.load_any_se(args.se)
+    win = torch.hann_window(512)
+    freqs = torch.fft.rfftfreq(512, 1 / 16000)
+    lo = (freqs < 4000).float()[:, None]
+    outs = {k: SE_WAV / k / args.split for k in ('fm_fuse_notch', 'fm_fuse_lo', 'fm_fuse_hi')}
+    for d in outs.values():
+        d.mkdir(parents=True, exist_ok=True)
+    for smp in s64.load_samples(args.split):
+        name = f"{smp['utt']}.wav"
+        if all((d / name).exists() for d in outs.values()):
+            continue
+        gen, sr = sf.read(SE_WAV / args.src / args.split / name, dtype='float32')
+        x, _ = sf.read(smp['path'], dtype='float32')
+        with torch.no_grad():
+            c = ce(torch.from_numpy(x)[None].cuda()).reshape(-1).cpu().numpy()
+        n = min(len(gen), len(c)); gen, c = gen[:n], c[:n]
+        G = torch.stft(torch.from_numpy(gen), 512, 128, window=win, return_complex=True)
+        mix = lambda C, wmap: torch.istft(((1 - wmap) * G.abs() + wmap * C.abs()) * torch.exp(1j * G.angle()),
+                                          512, 128, window=win, length=n).numpy().astype(np.float32)
+        C = torch.stft(torch.from_numpy(c), 512, 128, window=win, return_complex=True)
+        Cn = torch.stft(torch.from_numpy(s62.comb_notch(c)), 512, 128, window=win, return_complex=True)
+        sf.write(outs['fm_fuse_notch'] / name, mix(Cn, args.w * torch.ones_like(lo)), sr)
+        sf.write(outs['fm_fuse_lo'] / name, mix(C, args.w * lo), sr)
+        sf.write(outs['fm_fuse_hi'] / name, mix(C, args.w * (1 - lo)), sr)
+    print('done →', ', '.join(str(d) for d in outs.values()))
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('stage', choices=['select', 'fuse'])
+    ap.add_argument('stage', choices=['select', 'fuse', 'variants'])
     ap.add_argument('--split', default='test')
     ap.add_argument('--src', default='fm_taps_avg4', help='fuse: 生成モデル側の出力')
     ap.add_argument('--w', type=float, default=0.5, help='fuse: CE-SE 側の重み')
     ap.add_argument('--out', default='')
     ap.add_argument('--se', default='ce10.0', help='fuse: Whisper 用 SE（script 66 の load_any_se の名前）')
     args = ap.parse_args()
-    {'select': select, 'fuse': fuse}[args.stage](args)
+    {'select': select, 'fuse': fuse, 'variants': variants}[args.stage](args)
 
 
 if __name__ == '__main__':
