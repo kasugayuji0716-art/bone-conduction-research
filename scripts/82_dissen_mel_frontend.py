@@ -154,7 +154,9 @@ def evaluate_asr(args):
                 wav, _ = sf.read(SE_WAV / c / 'test' / f"{s['utt']}.wav", dtype='float32')
             with torch.no_grad():
                 if wav is None:   # TAPS / CE-SE は波形を作ってから
-                    se = evaluate_asr.se.setdefault(c, s64.load_se(s64.SE_CKPTS[c]))
+                    if c not in evaluate_asr.se:   # SE は一度だけ読み込む
+                        evaluate_asr.se[c] = s64.load_se(s64.SE_CKPTS[c])
+                    se = evaluate_asr.se[c]
                     x, _ = sf.read(s['path'], dtype='float32')
                     wav = se(torch.from_numpy(x)[None].to(DEVICE)).reshape(-1).cpu().numpy()
                 m = logmel(torch.from_numpy(np.asarray(wav, dtype=np.float32))[None].to(DEVICE))
