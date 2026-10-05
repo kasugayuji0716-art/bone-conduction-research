@@ -54,6 +54,7 @@ def whisper_ce():
     from transformers import WhisperForConditionalGeneration, WhisperProcessor
     s51 = import_module('51_train_se_ce_loss')
     proc = WhisperProcessor.from_pretrained('openai/whisper-small')
+    proc.tokenizer.set_prefix_tokens(language='korean', task='transcribe')  # 学習ラベルの先頭に <|ko|><|transcribe|> を入れる（2026-10-05 まではこれが抜けていた）
     wm = WhisperForConditionalGeneration.from_pretrained('openai/whisper-small').to(DEVICE).eval()
     for p in wm.parameters():
         p.requires_grad_(False)

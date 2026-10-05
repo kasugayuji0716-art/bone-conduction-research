@@ -77,8 +77,11 @@ def pairs(split, max_sec):
 
 def train(args):
     from transformers import WhisperForConditionalGeneration, WhisperProcessor
+    global CK
+    CK = BASE_DIR / 'checkpoints' / args.tag
     torch.manual_seed(0); random.seed(0); CK.mkdir(parents=True, exist_ok=True)
     proc = WhisperProcessor.from_pretrained('openai/whisper-small')
+    proc.tokenizer.set_prefix_tokens(language='korean', task='transcribe')  # 学習ラベルの先頭に <|ko|><|transcribe|> を入れる（2026-10-05 まではこれが抜けていた）
     wm = WhisperForConditionalGeneration.from_pretrained('openai/whisper-small').to(DEVICE).eval()
     for p in wm.parameters():
         p.requires_grad_(False)
@@ -135,8 +138,8 @@ def evaluate_asr(args):
     proc = WhisperProcessor.from_pretrained('openai/whisper-small')            # 語彙は全サイズ共通（FT も同じ）
     wm = WhisperForConditionalGeneration.from_pretrained(HF[args.asr]).to(DEVICE).eval()
     logmel = s51.WhisperLogMel().to(DEVICE)
-    net = UNet().to(DEVICE).eval(); net.load_state_dict(torch.load(CK / 'best.pt', map_location=DEVICE))
-    conds = args.conds or (['dissen_mel'] + WAV_CONDS)
+    net = UNet().to(DEVICE).eval(); net.load_state_dict(torch.load(BASE_DIR / 'checkpoints' / args.tag / 'best.pt', map_location=DEVICE))
+    conds = args.conds or ([args.tag] + WAV_CONDS)
     path = OUT / f'hyp_{args.asr}.csv'
     done = {(r['utt'], r['cond']) for r in csv.DictReader(open(path, encoding='utf-8'))} if path.exists() else set()
     f = open(path, 'a', newline='', encoding='utf-8'); w = csv.DictWriter(f, fieldnames=['utt', 'spk', 'cond', 'hyp'])
@@ -146,7 +149,7 @@ def evaluate_asr(args):
         for c in conds:
             if (s['utt'], c) in done:
                 continue
-            if c in ('dissen_mel', 'no_se'):
+            if c in (args.tag, 'no_se'):
                 wav, _ = sf.read(s['path'], dtype='float32')
             elif c in s64.SE_CKPTS:
                 wav = None
@@ -160,7 +163,7 @@ def evaluate_asr(args):
                     x, _ = sf.read(s['path'], dtype='float32')
                     wav = se(torch.from_numpy(x)[None].to(DEVICE)).reshape(-1).cpu().numpy()
                 m = logmel(torch.from_numpy(np.asarray(wav, dtype=np.float32))[None].to(DEVICE))
-                if c == 'dissen_mel':
+                if c == args.tag:
                     m = net(m)
                 ids = wm.generate(input_features=m.to(wm.dtype), language='ko', task='transcribe', max_new_tokens=225)
             hyp = proc.batch_decode(ids, skip_special_tokens=True)[0].strip()
@@ -208,6 +211,7 @@ def main():
     ap.add_argument('stage', choices=['train', 'eval', 'summary'])
     ap.add_argument('--asr', default='whisper-small', choices=list(HF))
     ap.add_argument('--conds', nargs='+')
+    ap.add_argument('--tag', default='dissen_mel', help='チェックポイント名＝評価での条件名')
     ap.add_argument('--epochs', type=int, default=10)
     ap.add_argument('--lr', type=float, default=3e-4)
     ap.add_argument('--alpha', type=float, default=1.0, help='気導音の log-mel との L1 の重み')

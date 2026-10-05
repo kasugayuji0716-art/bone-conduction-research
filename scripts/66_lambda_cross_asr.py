@@ -91,14 +91,16 @@ SETS = {'lambda': CONDS,
         # 相補学習のやり直し: 学習も test と同じく生成4サンプル平均と混ぜる
         'comp2': ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_avg4_comp2_ce10'],
         # 比較対象を test・全認識器でそろえる（SSL-MSE = Sato et al. 2025 型）
-        'baselines': ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10']}
+        'baselines': ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'],
+        # 学習ラベルの言語トークンを直した CE-SE（v3）単体と、生成4平均との融合
+        'ce_v3': ['taps', 'ce10.0', 'ce_v3_lambda_10.0', 'fm_avg4_mavg_ce10', 'fm_avg4_mavg_cev3']}
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
               'distill_m4_med_vbx', 'distill_m4_med_vbx_mag',
               'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and', 'fm_taps',
               'fm_taps_s1', 'fm_taps_s2', 'fm_taps_avg4', 'fm_scratch', 'fm_taps_avg4_ce100', 'fmce_0.1', 'fmce_0.01', 'fmce_sp0', 'fmce_2p0.1', 'fm_sel_conf', 'fm_avg4_mavg_ce10',
               'fm_post_ce', 'fm_avg4_post_ce', 'fm_draft_k1', 'fm_draft_lam0',
               'fm_taps_mixce0.25', 'fm_taps_mixce0.5', 'fm_taps_mixce0.75',
-              'fm_avg4_comp_ce10', 'fm_avg4_devce10', 'fm_avg4_comp2_ce10']
+              'fm_avg4_comp_ce10', 'fm_avg4_devce10', 'fm_avg4_comp2_ce10', 'ce_v3_lambda_10.0', 'fm_avg4_mavg_cev3']
 
 _WIN = torch.hann_window(512)
 

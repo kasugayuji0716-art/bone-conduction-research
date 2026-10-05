@@ -178,6 +178,8 @@ def main():
     parser.add_argument('--lr',         type=float, default=3e-4)
     parser.add_argument('--patience',   type=int,   default=5)
     parser.add_argument('--tag',        type=str,   default='ce_v2_lambda_2.0')
+    parser.add_argument('--lang_prefix', action='store_true',
+                        help='学習ラベルに言語・タスクのトークンを入れる（推論時と同じ条件。2026-10-05 以降の学習はこれを付ける）')
     parser.add_argument('--no_recon',   action='store_true',
                         help='CE loss only (no L1+STFT reconstruction loss)')
     args = parser.parse_args()
@@ -203,6 +205,8 @@ def main():
 
     # Whisper (full model, frozen)
     processor = WhisperProcessor.from_pretrained('openai/whisper-small')
+    if args.lang_prefix:  # 学習ラベルの先頭に <|ko|><|transcribe|> を入れる（2026-10-05 まではこれが抜けていた）
+        processor.tokenizer.set_prefix_tokens(language='korean', task='transcribe')
     whisper = WhisperForConditionalGeneration.from_pretrained('openai/whisper-small').to(DEVICE)
     whisper.eval()
     for p in whisper.parameters():

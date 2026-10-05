@@ -62,7 +62,7 @@ def fuse(args):
     """生成モデルの出力と CE-SE の出力の振幅を (1−w):w で混ぜる（位相は生成モデル）。w=0.5 が fm_avg4_mavg_ce10"""
     s64 = import_module('64_retranscribe_all')
     s66 = import_module('66_lambda_cross_asr')
-    ce = s66.load_any_se('ce10.0')
+    ce = s66.load_any_se(args.se)
     name_out = args.out or ('fm_avg4_mavg_ce10' if (args.src, args.w) == ('fm_taps_avg4', 0.5) else f'{args.src}_mixce{args.w:g}')
     out = SE_WAV / name_out / args.split
     out.mkdir(parents=True, exist_ok=True)
@@ -90,6 +90,7 @@ def main():
     ap.add_argument('--src', default='fm_taps_avg4', help='fuse: 生成モデル側の出力')
     ap.add_argument('--w', type=float, default=0.5, help='fuse: CE-SE 側の重み')
     ap.add_argument('--out', default='')
+    ap.add_argument('--se', default='ce10.0', help='fuse: Whisper 用 SE（script 66 の load_any_se の名前）')
     args = ap.parse_args()
     {'select': select, 'fuse': fuse}[args.stage](args)
 
