@@ -179,7 +179,9 @@ def main():
     parser.add_argument('--patience',   type=int,   default=5)
     parser.add_argument('--tag',        type=str,   default='ce_v2_lambda_2.0')
     parser.add_argument('--lang_prefix', action='store_true',
-                        help='学習ラベルに言語・タスクのトークンを入れる（推論時と同じ条件。2026-10-05 以降の学習はこれを付ける）')
+                        help='学習ラベルの言語・タスクのトークンを明示的に設定する（get_decoder_prompt_ids でも入るので結果は同じ）')
+    parser.add_argument('--amp', choices=['bf16', 'fp16'], default='bf16',
+                        help='混合精度。新PCでは fp16 だと勾配が NaN になり学習が進まない')
     parser.add_argument('--no_recon',   action='store_true',
                         help='CE loss only (no L1+STFT reconstruction loss)')
     args = parser.parse_args()
@@ -205,7 +207,7 @@ def main():
 
     # Whisper (full model, frozen)
     processor = WhisperProcessor.from_pretrained('openai/whisper-small')
-    if args.lang_prefix:  # 学習ラベルの先頭に <|ko|><|transcribe|> を入れる（2026-10-05 まではこれが抜けていた）
+    if args.lang_prefix:  # 念のため明示（下の get_decoder_prompt_ids が同じ設定をするので、無くてもラベルには <|ko|><|transcribe|> が入る）
         processor.tokenizer.set_prefix_tokens(language='korean', task='transcribe')
     whisper = WhisperForConditionalGeneration.from_pretrained('openai/whisper-small').to(DEVICE)
     whisper.eval()
@@ -238,7 +240,10 @@ def main():
                           collate_fn=collate, num_workers=n_workers, pin_memory=True)
 
     optimizer = torch.optim.Adam(se_model.parameters(), lr=args.lr, betas=(0.9, 0.99))
-    scaler = torch.amp.GradScaler('cuda')
+    # fp16: 旧PC（DL-Box5）の CE v2 はこれで学習。新PC（Blackwell）では fp16 の逆伝播が NaN になり、
+    # GradScaler が毎回更新を飛ばして学習が進まない（2026-10-05 確認）→ 既定は bf16（スケーラ不要）
+    amp_dtype = torch.float16 if args.amp == 'fp16' else torch.bfloat16
+    scaler = torch.amp.GradScaler('cuda', enabled=(args.amp == 'fp16'))
 
     log_path = ckpt_dir / 'training_log.csv'
     with open(log_path, 'w', newline='') as f:
@@ -270,7 +275,7 @@ def main():
                 l_recon = torch.zeros(1, device=DEVICE)
 
             if args.lambda_asr > 0:
-                with torch.amp.autocast('cuda'):
+                with torch.amp.autocast('cuda', dtype=amp_dtype):
                     mel_se = log_mel_fn(se_t)
                     encoder_out = whisper.model.encoder(mel_se)
                     decoder_out = whisper(
@@ -314,7 +319,7 @@ def main():
                     l_recon = torch.zeros(1, device=DEVICE)
 
                 if args.lambda_asr > 0:
-                    with torch.amp.autocast('cuda'):
+                    with torch.amp.autocast('cuda', dtype=amp_dtype):
                         mel_se = log_mel_fn(se_t)
                         encoder_out = whisper.model.encoder(mel_se)
                         decoder_out = whisper(

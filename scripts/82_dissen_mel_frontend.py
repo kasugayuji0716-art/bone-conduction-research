@@ -81,7 +81,7 @@ def train(args):
     CK = BASE_DIR / 'checkpoints' / args.tag
     torch.manual_seed(0); random.seed(0); CK.mkdir(parents=True, exist_ok=True)
     proc = WhisperProcessor.from_pretrained('openai/whisper-small')
-    proc.tokenizer.set_prefix_tokens(language='korean', task='transcribe')  # 学習ラベルの先頭に <|ko|><|transcribe|> を入れる（2026-10-05 まではこれが抜けていた）
+    proc.tokenizer.set_prefix_tokens(language='korean', task='transcribe')  # 学習ラベルの先頭に <|ko|><|transcribe|> を入れる（script 82 の初版はこれが抜けていた。79/51 等は get_decoder_prompt_ids で入っていた）
     wm = WhisperForConditionalGeneration.from_pretrained('openai/whisper-small').to(DEVICE).eval()
     for p in wm.parameters():
         p.requires_grad_(False)
