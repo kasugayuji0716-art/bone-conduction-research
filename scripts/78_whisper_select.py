@@ -63,7 +63,13 @@ def fuse(args):
     s64 = import_module('64_retranscribe_all')
     s66 = import_module('66_lambda_cross_asr')
     ce = s66.load_any_se(args.se)
-    name_out = args.out or ('fm_avg4_mavg_ce10' if (args.src, args.w) == ('fm_taps_avg4', 0.5) else f'{args.src}_mixce{args.w:g}')
+    band = args.w_lo is not None
+    if band:   # 帯域ごとの重み（4 kHz 未満 w_lo、以上 w_hi）
+        name_out = args.out or f'{args.src}_lo{args.w_lo:g}hi{args.w_hi:g}'
+        wmap = torch.where(torch.fft.rfftfreq(512, 1 / 16000) < 4000, args.w_lo, args.w_hi)[:, None].float()
+    else:
+        name_out = args.out or ('fm_avg4_mavg_ce10' if (args.src, args.w) == ('fm_taps_avg4', 0.5) else f'{args.src}_mixce{args.w:g}')
+        wmap = torch.tensor(args.w)
     out = SE_WAV / name_out / args.split
     out.mkdir(parents=True, exist_ok=True)
     win = torch.hann_window(512)
@@ -78,7 +84,7 @@ def fuse(args):
         n = min(len(gen), len(c))
         G = torch.stft(torch.from_numpy(gen[:n]), 512, 128, window=win, return_complex=True)
         C = torch.stft(torch.from_numpy(c[:n]), 512, 128, window=win, return_complex=True)
-        Y = ((1 - args.w) * G.abs() + args.w * C.abs()) * torch.exp(1j * G.angle())
+        Y = ((1 - wmap) * G.abs() + wmap * C.abs()) * torch.exp(1j * G.angle())
         sf.write(out / name, torch.istft(Y, 512, 128, window=win, length=n).numpy().astype(np.float32), sr)
     print(f'done → {out}')
 
@@ -121,6 +127,8 @@ def main():
     ap.add_argument('--split', default='test')
     ap.add_argument('--src', default='fm_taps_avg4', help='fuse: 生成モデル側の出力')
     ap.add_argument('--w', type=float, default=0.5, help='fuse: CE-SE 側の重み')
+    ap.add_argument('--w_lo', type=float, default=None, help='fuse: 4 kHz 未満の CE-SE 側の重み（指定すると帯域別）')
+    ap.add_argument('--w_hi', type=float, default=0.5, help='fuse: 4 kHz 以上の CE-SE 側の重み')
     ap.add_argument('--out', default='')
     ap.add_argument('--se', default='ce10.0', help='fuse: Whisper 用 SE（script 66 の load_any_se の名前）')
     args = ap.parse_args()

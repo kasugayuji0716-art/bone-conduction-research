@@ -95,7 +95,10 @@ SETS = {'lambda': CONDS,
         # 学習ラベルの言語トークンを直した CE-SE（v3）単体と、生成4平均との融合
         'ce_v3': ['taps', 'ce10.0', 'ce_v3_lambda_10.0', 'fm_avg4_mavg_ce10', 'fm_avg4_mavg_cev3'],
         # 融合の分解（script 78 variants）: 櫛状成分を除いて融合／4 kHz 未満だけ／4 kHz 以上だけ
-        'fuse_anal': ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_fuse_notch', 'fm_fuse_lo', 'fm_fuse_hi']}
+        'fuse_anal': ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_fuse_notch', 'fm_fuse_lo', 'fm_fuse_hi'],
+        # 帯域別の重み（dev で Whisper-small だけで選ぶ）
+        'band_dev': ['taps', 'fm_taps_avg4'] + [f'fm_taps_avg4_lo{l}hi{h}' for l in ('0.25', '0.5', '0.75') for h in ('0', '0.25', '0.5', '0.75')]}
+ALL_CONDS += [f'fm_taps_avg4_lo{l}hi{h}' for l in ('0.25', '0.5', '0.75') for h in ('0', '0.25', '0.5', '0.75')]
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
               'distill_m4_med_vbx', 'distill_m4_med_vbx_mag',
               'ssl_wavlm_0.3', 'ssl_wavlm_0.03', 'ctc4_xlsr', 'ce10_ctc4_sum', 'ce10_ctc4_and', 'fm_taps',
