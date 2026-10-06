@@ -307,11 +307,12 @@ def main():
     ap.add_argument('--split', choices=['test', 'dev'], default='test')
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--set', choices=list(SETS), default='lambda')
+    ap.add_argument('--conds', nargs='+', help='--set の代わりに条件を直接指定（ALL_CONDS に無い名前は集計されない）')
     a = ap.parse_args()
     if a.stage == 'asr':
         if not a.asr:
             ap.error('--asr が必要')
-        asr(a.asr, a.split, a.limit, SETS[a.set])
+        asr(a.asr, a.split, a.limit, a.conds or SETS[a.set])
     elif a.stage == 'dist':
         dist(a.split, a.limit)
     else:
