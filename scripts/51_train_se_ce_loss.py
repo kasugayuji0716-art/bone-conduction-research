@@ -184,6 +184,15 @@ def main():
                         help='混合精度。新PCでは fp16 だと勾配が NaN になり学習が進まない')
     parser.add_argument('--no_recon',   action='store_true',
                         help='CE loss only (no L1+STFT reconstruction loss)')
+    # 2026-10-08 転移しやすい ASR 損失（results/CROSS_DOMAIN_IDEAS_2026-10-08.md 案1）
+    parser.add_argument('--init', type=str, default='',
+                        help='初期値の SE の重み（既定: TAPS 公開の SE-Conformer）。例: checkpoints/ce_v2_lambda_10.0/best.th')
+    parser.add_argument('--ghost', type=float, default=0.0,
+                        help='学習時だけ Whisper の各層の出力に dropout（Ghost Networks, Li et al. AAAI 2020）')
+    parser.add_argument('--layerdrop', type=float, default=0.0,
+                        help='学習時だけ Whisper の各層を確率的に飛ばす（残差だけ通す）')
+    parser.add_argument('--input_div', action='store_true',
+                        help='学習時だけ Whisper に入れる前の波形を変形（Input Diversity, Xie et al. CVPR 2019）: ±3 dB のゲイン、0〜10 ms の時間シフト')
     args = parser.parse_args()
 
     ckpt_dir = BASE_DIR / 'checkpoints' / args.tag
@@ -195,12 +204,15 @@ def main():
     # SE model
     from models.seconformer import seconformer as TAPSSeconformer
     se_model = TAPSSeconformer(**TAPS_SE_CONFIG).to(DEVICE)
-    state = torch.load(PRETRAINED_DIR / 'seconformer.th', map_location=DEVICE, weights_only=False)
+    init_path = Path(args.init) if args.init else PRETRAINED_DIR / 'seconformer.th'
+    if not init_path.is_absolute():
+        init_path = BASE_DIR / init_path
+    state = torch.load(init_path, map_location=DEVICE, weights_only=False)
     if isinstance(state, dict) and 'model' in state:
         state = state['model']
     se_model.load_state_dict(state)
     n_params = sum(p.numel() for p in se_model.parameters() if p.requires_grad)
-    print(f'SE-Conformer: pretrained loaded ({n_params/1e6:.1f}M params)')
+    print(f'SE-Conformer: {init_path} loaded ({n_params/1e6:.1f}M params)')
 
     # STFT loss (TAPS official params)
     stft_loss_fn = MultiResolutionSTFTLoss().to(DEVICE)
@@ -224,6 +236,31 @@ def main():
 
     # log-mel (Whisper-compatible)
     log_mel_fn = WhisperLogMel().to(DEVICE)
+
+    # 学習時だけ Whisper を揺らす（凍結したまま、擬似的に別のモデルを毎ステップ作る）。検証・選択は揺らさない
+    ghost = {'on': False}
+    if args.ghost > 0 or args.layerdrop > 0:
+        def perturb(module, inputs, kwargs, output):
+            if not ghost['on']:
+                return output
+            h_in = inputs[0] if inputs else kwargs['hidden_states']
+            h = output[0] if isinstance(output, tuple) else output
+            if args.layerdrop > 0 and torch.rand(()) < args.layerdrop:
+                h = h_in
+            elif args.ghost > 0:
+                h = F.dropout(h, p=args.ghost, training=True)
+            return (h,) + tuple(output[1:]) if isinstance(output, tuple) else h
+        for layer in list(whisper.model.encoder.layers) + list(whisper.model.decoder.layers):
+            layer.register_forward_hook(perturb, with_kwargs=True)
+        print(f'Ghost Whisper: dropout={args.ghost}, layerdrop={args.layerdrop}（学習時のみ）')
+
+    def diversify(wav):
+        if not (args.input_div and ghost['on']):
+            return wav
+        B = wav.shape[0]
+        gain = 10 ** ((torch.rand(B, 1, device=wav.device) * 6 - 3) / 20)
+        shift = int(torch.randint(0, 161, ()))
+        return F.pad(wav * gain, (shift, 0))[..., :wav.shape[-1]]
 
     # Data
     print('\nData:')
@@ -275,14 +312,16 @@ def main():
                 l_recon = torch.zeros(1, device=DEVICE)
 
             if args.lambda_asr > 0:
+                ghost['on'] = True
                 with torch.amp.autocast('cuda', dtype=amp_dtype):
-                    mel_se = log_mel_fn(se_t)
+                    mel_se = log_mel_fn(diversify(se_t))
                     encoder_out = whisper.model.encoder(mel_se)
                     decoder_out = whisper(
                         encoder_outputs=(encoder_out,),
                         labels=label_ids,
                     )
                     l_ce = decoder_out.loss
+                ghost['on'] = False
             else:
                 l_ce = torch.zeros(1, device=DEVICE)
 

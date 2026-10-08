@@ -98,6 +98,15 @@ SETS = {'lambda': CONDS,
         'fuse_anal': ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_fuse_notch', 'fm_fuse_lo', 'fm_fuse_hi'],
         # 帯域別の重み（dev で Whisper-small だけで選ぶ）
         'band_dev': ['taps', 'fm_taps_avg4'] + [f'fm_taps_avg4_lo{l}hi{h}' for l in ('0.25', '0.5', '0.75') for h in ('0', '0.25', '0.5', '0.75')]}
+# script 84: 重み空間の内挿（WiSE-FT、dev で Whisper-small だけで α を選ぶ）とケプストラム領域の融合
+WISE = [f'wise_a{a:g}' for a in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)]
+CEPS = ['fm_ceps_geo', 'fm_ceps_env', 'fm_ceps_fine']
+# script 51 --ghost/--layerdrop/--input_div: 転移しやすい ASR 損失（tr_ctrl は同じ追加学習を揺らしなしで行った対照）
+TRANSFER = ['tr_ctrl', 'tr_ghost', 'tr_ghost_div']
+SETS.update({'wise_dev': ['taps', 'ce10.0', 'avg_taps_ce10.0', 'mavg_taps_ce10.0'] + WISE,
+             'ceps': ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + CEPS,
+             'transfer': ['taps', 'ce10.0'] + TRANSFER + ['fm_taps_avg4', 'fm_avg4_mavg_ce10'] + [f'fm_avg4_mavg_{t}' for t in TRANSFER]})
+ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
 ALL_CONDS += [f'fm_taps_avg4_lo{l}hi{h}' for l in ('0.25', '0.5', '0.75') for h in ('0', '0.25', '0.5', '0.75')]
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
               'distill_m4_med_vbx', 'distill_m4_med_vbx_mag',
