@@ -18,8 +18,8 @@
 
 % 見出しを講演論文らしく小さめに
 \makeatletter
-\renewcommand{\section}{\@startsection{section}{1}{\z@}{1.2ex plus .3ex}{.6ex}{\normalfont\large\sffamily\bfseries}}
-\renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}{.9ex plus .2ex}{.4ex}{\normalfont\normalsize\sffamily\bfseries}}
+\renewcommand{\section}{\@startsection{section}{1}{\z@}{1.0ex plus .3ex}{.5ex}{\normalfont\large\sffamily\bfseries}}
+\renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}{.7ex plus .2ex}{.3ex}{\normalfont\normalsize\sffamily\bfseries}}
 \makeatother
 
 \newcommand{\figdir}{../figures}
@@ -55,15 +55,14 @@ ASR損失で学習したSEは、損失に用いた認識器の入力特徴量に
 
 本稿では対象をWhisperと同じ対数メルスペクトログラムを入力とする認識器（以下Whisper系）に定め、損失と設定の選択にはWhisper-smallのみを用い、他のWhisper系5種を評価専用とする。
 そのうえで次の3点を示す。
-(1) 事前学習済みのflow matching生成モデルをTAPSで適応すると、入力特徴量の異なる認識器を含む9種すべてでCERが下がり、効果は事前学習に由来する。
-(2) 生成モデルの複数サンプルの振幅平均に、Whisper用SEの出力を振幅で融合すると、学習に用いていないWhisper系にもさらに上乗せが得られる。
-(3) 生成モデル自体をWhisperの損失で学習する方法は失敗し、融合の上乗せは帯域の両側から生じ、他系統の認識器への害は元々存在しない4~kHz以上の成分から生じる。
+(1) 事前学習済みのflow matching生成モデルをTAPSで適応すると、入力特徴量の異なる認識器を含む9種すべてでCERが下がる。事前学習なしでは悪化し、効果は事前学習に由来する。
+(2) 生成モデルの出力（複数サンプルの振幅平均）にWhisper用SEの出力を振幅で融合すると、学習に用いていないWhisper系にも上乗せが得られ、既存のASR損失によるSE（SSL-MSE、Dissen型）より良い。一方、生成モデル自体をWhisperの損失で学習する方法は効かない。
+(3) 融合の上乗せは4~kHz未満・以上の両帯域から生じる。他系統の認識器への害は、喉マイクに元々存在しない4~kHz以上の成分から生じる。
 
 %────────────────────────────────────────
 \section{方法}
 \subsection{生成モデルによる復元}
-NVIDIAが公開しているflow matching\cite{lipman2023}型の音声復元モデル（4.3億パラメータ、複素STFT領域）\cite{ku2024}を用いる。
-このモデルは大規模な音声データで、マスクした区間を復元するよう事前学習されている。
+NVIDIAが公開しているflow matching\cite{lipman2023}型の音声復元モデル（4.3億パラメータ、複素STFT領域）\cite{ku2024}を用いる。大規模音声でマスク区間の復元により事前学習されたモデルである。
 本研究ではTAPSの喉マイク音声を条件、同時収録の気導マイク音声を目標として追加学習する（ASRの損失は用いない）。
 推論では標準正規分布の雑音から出発し、喉マイク音声を条件として常微分方程式をEuler法20ステップで解く。
 
@@ -86,7 +85,8 @@ Whisper-smallは凍結し、$\lambda$はdevのCERで$\{0, 0.1, 0.5, 1, 2, 5, 10\
 \begin{equation}
   Y = \bigl\{(1-w)|G| + w|C|\bigr\}\, e^{j\angle G}
 \end{equation}
-$w$はdevでWhisper-smallのCERのみを見て$\{0.25, 0.5, 0.75\}$から選び、$w=0.5$とした（devのCERはそれぞれ0.202・0.196・0.198）。
+$w$は、生成1回の出力との融合をdevで比べ、Whisper-smallのCERのみを見て$\{0.25, 0.5, 0.75\}$から選んだ（CERはそれぞれ0.202・0.196・0.198）。
+test では同じ$w=0.5$を4サンプル平均との融合に用いた。
 融合に新たな学習は要らない。
 
 %────────────────────────────────────────
@@ -106,6 +106,7 @@ Dissen型は、凍結したASRの損失で前段を学習する方法\cite{disse
 \textbf{Whisper系。}
 Whisper-small（損失と選択に使用）、Whisper-base、Whisper-medium、Whisper-large-v3-turbo、TAPSの喉マイク音声でファインチューニングしたWhisper-small（FT Whisper）、Qwen3-ASR-1.7Bの6種である。
 Qwen3-ASRのエンコーダはWhisperと異なるが、入力は同形式の対数メル（128次元）である。
+Whisperはfaster-whisper（CTranslate2）で言語を韓国語に指定して認識した。
 
 \textbf{入力特徴量の異なる認識器。}
 Whisper系への特化を確認する対照として、波形入力のCTC型であるMMS-1B\cite{mms}とXLS-R\cite{xlsr}（韓国語で追加学習したもの）、Kaldi型のフィルタバンクを入力とするZipformer\cite{zipformer}を用いた。
@@ -120,15 +121,18 @@ Zipformerは空白を含めたCERである。
 \subsection{主な結果}
 表\ref{tab:main}に各手法のCERを、図\ref{fig:rel}にTAPS SE比の相対変化を示す。
 生成モデル（1回の生成）は9種の認識器すべてでTAPS SEよりCERを15〜24\%下げ、いずれも10話者全員で改善した（$p=0.002$）。
-Whisper-smallの認識結果で見ると、CERが0.99以上に崩れた発話はなく、出力長の中央値も変わらず（正解長比0.976）、置換と挿入の誤りが減っていた。
-生成による作り話の兆候は見られなかった。
+Whisper-smallの認識結果では崩れた発話（CER$\geq$0.99）がなく、出力長も変わらず、置換と挿入の誤りが減っており、生成による作り話の兆候は見られなかった。
+
+CE-SE単体は、Whisper系ではTAPS SEよりCERを下げた（Whisper-baseを除き$-14$〜$-17$\%、baseは$-2.2$\%）。
+一方、XLS-Rでは25.8\%、Zipformerでは45.9\%悪化した。
+ASR損失による改善は、損失に用いた認識器と入力特徴量の異なる認識器には及ばない。
 
 同じ構造・同じ学習量で初期値を乱数としたモデルは、Whisper-smallで0.551、XLS-Rで0.524とTAPS SEより大幅に悪化した。
 生成モデルの効果はモデルの規模ではなく事前学習に由来する。
 
 \begin{table}[t]
   \centering
-  \caption{各手法のtest CER（*は損失・選択に使用。SSL: SSL-MSE、W-FT: FT Whisper）}
+  \caption{各手法のtest CER。TAPS: TAPS SE、SSL: SSL-MSE、生成×$N$: 生成モデルの$N$サンプル平均、W-FT: FT Whisper、*: 損失・選択に使用}
   \label{tab:main}
   \footnotesize
   \setlength{\tabcolsep}{2.4pt}
@@ -152,48 +156,51 @@ Whisper-smallの認識結果で見ると、CERが0.99以上に崩れた発話は
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.92\columnwidth]{\figdir/fusion_relative.png}
+  \includegraphics[width=0.80\columnwidth]{\figdir/fusion_relative.png}
   \caption{TAPS SE比のCER変化（破線より上がWhisper系）}
   \label{fig:rel}
 \end{figure}
 
-\subsection{サンプル平均と融合}
+\subsection{サンプル平均・融合と既存手法との比較}
 4サンプルの振幅平均は、1回の生成よりさらにCERを下げた（Whisper-small 0.180→0.169、10/10話者、$p=0.002$）。
-平均CERは乱数の種によらずほぼ一定（0.180・0.182・0.181）であったが、発話単位では3回のCERの差が0.1を超える発話が82/1,000あり、平均によりこのばらつきが抑えられたと考えられる。
-この改善は入力特徴量の異なる認識器でも同様であった。
+平均CERは乱数の種によらずほぼ一定であったが、発話単位では3回のCERの差が0.1を超える発話が82/1,000あり、平均がこのばらつきを抑えたと考えられる。
 
 CE-SEとの融合は、Whisper系の6種すべてで4サンプル平均よりCERを下げた（$-1.8$〜$-8.0$\%）。
 Whisper-medium・large-v3-turbo・FT Whisperでは10/10話者（$p=0.002$）、Whisper-smallで9/10話者（$p=0.004$）で改善し、Whisper-baseとQwen3-ASRでは有意でなかった。
-TAPS SE比ではWhisper系で$-26$〜$-37$\%となり、SSL-MSE・CE-SE単体のいずれよりも良い。
+TAPS SE比ではWhisper系で$-26$〜$-37$\%となり、既存手法であるSSL-MSEやCE-SE単体よりも6種すべてで良い。
 一方、入力特徴量の異なる認識器では融合の上乗せはなく、Zipformerでは4サンプル平均より11.7\%悪化した（0/10話者）。
 融合はWhisper系に特化した上乗せである。
 
-Dissen型は80次元メルのWhisperにのみ適用できるため、全条件をtransformers版Whisperの貪欲復号で認識し直して比較した。
+もう1つの既存手法であるDissen型は80次元メルのWhisperにのみ適用できるため、表1とは別に、全条件をtransformers版Whisperの貪欲復号で認識し直して比較した。
 Whisper-smallでTAPS SE 0.237、Dissen型 0.239、融合 0.169であり、Dissen型はWhisper-base・medium・FT WhisperでもTAPS SEより悪かった。
 喉マイクのメルのみを入力とするため、欠けた帯域を補えなかったと考えられる。
 
-\subsection{生成モデル自体をWhisperに合わせる試み}
-融合の代わりに、生成モデル自体をWhisper-smallの損失で学習する方法を試した（表\ref{tab:fail}）。
-途中時刻$t$から1段で得られる完成音の見積もり$\hat{x}_1 = x_t + (1-t)\hat{v}$にCEをかけて追加学習すると、見積もりのCEは下がるが、20段で生成した出力のCERは悪化した。
+\subsection{Whisperに合わせる成分を学習で組み込む試み}
+融合の代わりに、Whisper-smallの損失を学習で組み込む方法を試した（表\ref{tab:fail}）。
+まず生成モデル自体を学習した。
+flow matchingでは、雑音（$t=0$）から音声（$t=1$）へ向かう経路上の点$x_t$でモデルが速度$\hat{v}$を推定する。
+そこから1段で得られる完成音の見積もり$\hat{x}_1 = x_t + (1-t)\hat{v}$にCEをかけて追加学習すると、見積もりのCEは下がるが、20段で生成した出力のCERは悪化した。
 CEなしで同じ手順をとると悪化しないため、原因はCE損失にある。
 最終段のみに損失をかけるDRaFT-K\cite{draft}型の学習、生成出力に小さな補正モジュールを加える方法も効果がなかった。
-CE-SEを融合後の音に対するCEで再学習すると、Whisper系では一貫して改善したが、幅は0.2〜1.9\%にとどまった。
+次に、生成モデルは固定し、CE-SEを融合後の音に対するCEで再学習した。
+Whisper系では一貫して改善したが、幅は0.2〜1.9\%にとどまり、学習なしの融合からの上乗せは小さい。
 
 \begin{table}[t]
   \centering
-  \caption{生成モデルをWhisperに合わせる試み（W-small）}
+  \caption{Whisperの損失を学習で組み込む試み（W-small、test CER）}
   \label{tab:fail}
-  \small
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
   \begin{tabular}{lc}
     \toprule
     方法 & 結果 \\
     \midrule
     生成×1（基準） & 0.180 \\
-    $\hat{x}_1$にCE（$\lambda=0.1$／0.01） & 0.193／0.191 \\
-    同じ手順でCEなし（$\lambda=0$） & 0.179 \\
-    DRaFT-K（最終段にCE） & dev損失が悪化 \\
-    補正モジュール（0.03M） & 変化なし \\
-    融合後の音でCE-SEを再学習 & 0.162（融合0.163） \\
+    生成：$\hat{x}_1$にCE（重み0.1／0.01） & 0.193／0.191 \\
+    生成：同じ手順でCEなし & 0.179 \\
+    生成：DRaFT-K（最終段にCE） & devのCEが悪化 \\
+    生成出力に補正モジュール（0.03M） & devのCE変化なし \\
+    CE-SEを融合後の音で再学習 & 0.162（融合0.163） \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -208,7 +215,7 @@ CE-SEの出力には、3〜7.75~kHzの250~Hz間隔の位置に鋭いピークが
 
 \begin{table}[t]
   \centering
-  \caption{融合の分解（test CER）}
+  \caption{融合の分解（test CER）。櫛除去: CE-SEの櫛状成分を除いてから融合、$<$4~kHz／$\geq$4~kHz: その帯域だけ融合}
   \label{tab:decomp}
   \small
   \setlength{\tabcolsep}{3.0pt}
@@ -219,42 +226,43 @@ CE-SEの出力には、3〜7.75~kHzの250~Hz間隔の位置に鋭いピークが
     W-small* & 0.169 & 0.163 & 0.163 & 0.166 & 0.167 \\
     W-medium & 0.151 & 0.144 & 0.145 & 0.145 & 0.148 \\
     W-turbo & 0.131 & 0.125 & 0.126 & 0.126 & 0.128 \\
-    FT Whisper & 0.100 & 0.092 & 0.093 & 0.094 & 0.099 \\
+    W-FT & 0.100 & 0.092 & 0.093 & 0.094 & 0.099 \\
     Zipformer & 0.433 & 0.483 & 0.491 & \textbf{0.431} & 0.479 \\
     \bottomrule
   \end{tabular}
 \end{table}
-
-\subsection{気導音声との距離}
-ASRの学習に用いていない表現であるHuBERT-Large\cite{hubert}の全層について、同一発話の気導音声とのフレームごとのコサイン距離を求めた。
-これまでに評価した17条件をまたぐと、この距離は9認識器のうち最も悪化した認識器のCER変化と強く相関した（Spearman $\rho=0.92$）。
-一方、Whisper系のCERとの相関は弱く（Whisper-small $\rho=0.37$）、CE-SEのように気導音声から離れる変化でもWhisper系のCERは下がる。
-融合はこの両者を組み合わせており、距離は生成×4の0.092から0.111へ増える。
 
 %────────────────────────────────────────
 \section{考察}
 結果は、喉マイク音声のWhisper系向けSEにおいて2つの成分が役割を分けていることを示す。
 事前学習済み生成モデルは欠けた成分を自然な音声として補い、認識器の系統によらずCERを下げる。
 CE-SEは特定の入力特徴量に合わせた変化を加え、その効果は損失に用いたWhisper-smallだけでなく、学習に用いていない他サイズのWhisperやQwen3-ASRにも及ぶ。
-ただしCE-SE単体ではWhisper-baseの改善は小さく（$-2.2$\%）、生成モデルの出力と融合して初めて系列全体に安定して効いた。
+ただしWhisper-baseではCE-SE単体の改善が小さく（$-2.2$\%）、融合の上乗せもbaseとQwen3-ASRでは有意でなかった。Whisper系の中でも効き方には差がある。
+
+この役割分担は、ASRの学習に用いていない表現での気導音声との距離にも表れる。
+HuBERT-Large\cite{hubert}の全層で同一発話の気導音声とのフレームごとのコサイン距離を求めると、9認識器すべてで評価した17条件をまたいで、この距離は最も悪化した認識器のCER変化と強く相関した（Spearman $\rho=0.92$）。
+一方、Whisper-smallのCERとの相関は弱く（$\rho=0.37$）、CE-SEは気導音声から離れる（距離0.202、TAPS SEは0.130）にもかかわらずWhisper系のCERを下げる。
+融合は距離を生成×4の0.092から0.111へ増やす代わりに、Whisper系のCERを下げている。
 
 生成モデル自体をCE損失で学習する試みが失敗したことは、Whisperに合わせる成分を生成過程に組み込むよりも、生成の外側で足すほうが容易であることを示唆する。
-1段の見積もりに対する損失が多段の生成に持ち越されない点は、flow matchingの学習目標がサンプルの分布を合わせるものであり、個々の出力を特定の損失で最適化する構造になっていないことと整合する。
+1段の見積もりに対する損失が多段の生成に持ち越されなかったのは、flow matchingの学習目標が出力の分布を合わせるものであり、個々の出力を特定の損失で最適化する構造になっていないためと考えられる。
 
-実用上は2つの選択肢がある。
-Whisper系のみを用いるなら一様な融合が最良であり、他系統の認識器も併用するなら4~kHz未満のみの融合でZipformerへの害を避けつつWhisper系の上乗せの約半分が得られる。
+実用上、Whisper系のみを用いるなら一様な融合が最良であり、他系統の認識器も併用するなら4~kHz未満のみの融合でZipformerへの害を避けつつWhisper系の上乗せの約半分が得られる。
 
-本研究の限界として、計算量が大きい（4.3億パラメータのモデルを20段・4サンプル実行）こと、評価がTAPS（韓国語・1機種）のみであること、各モデルの学習が1回であることが挙げられる。
+本研究の限界として、計算量が大きい（4.3億パラメータのモデルを20段・4サンプル実行）こと、評価がTAPS（韓国語・1機種）のみであること、各モデルの学習が1回であること、Dissen型との比較が別の認識経路によることが挙げられる。
 融合自体は既存の部品の組み合わせであり、今後は融合の出力を教師とした軽量なSEへの蒸留と、別言語・別機種の体内伝導マイクコーパス\cite{vibravox}での検証を行う。
 
 %────────────────────────────────────────
 \section{まとめ}
 Whisper系の認識器に向けた喉マイクSEについて、事前学習済み生成モデルとASR損失で学習したSEの役割を調べた。
 生成モデルの適応は9種の認識器すべてでCERを下げ、その効果は事前学習に由来した。
-生成モデルの4サンプル平均とWhisper用SEの振幅融合は、学習に用いていないWhisper系にも上乗せをもたらし、TAPS SE比で26〜37\%CERを下げた。
-一方、生成モデル自体をWhisperの損失で学習する方法は効果がなく、Whisper用の成分のうち4~kHz以上のものは他系統の認識器を悪化させた。
+生成モデルの4サンプル平均とWhisper用SEの振幅融合は、学習に用いていないWhisper系にも上乗せをもたらし、TAPS SE比で26〜37\%CERを下げ、既存のASR損失によるSEより良かった。
+一方、生成モデル自体をWhisperの損失で学習する方法は効果がなかった。
+融合の上乗せは両帯域から生じ、Whisper用の成分のうち4~kHz以上のものは他系統の認識器を悪化させた。
 
-\small
+\footnotesize
+\let\oldbibitem\bibitem
+\renewcommand{\bibitem}{\setlength{\itemsep}{0pt}\setlength{\parsep}{0pt}\oldbibitem}
 \bibliographystyle{IEEEtran}
 \bibliography{refs}
 
