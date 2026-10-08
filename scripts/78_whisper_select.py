@@ -68,7 +68,7 @@ def fuse(args):
         name_out = args.out or f'{args.src}_lo{args.w_lo:g}hi{args.w_hi:g}'
         wmap = torch.where(torch.fft.rfftfreq(512, 1 / 16000) < 4000, args.w_lo, args.w_hi)[:, None].float()
     else:
-        name_out = args.out or ('fm_avg4_mavg_ce10' if (args.src, args.w) == ('fm_taps_avg4', 0.5) else f'{args.src}_mixce{args.w:g}')
+        name_out = args.out or ('fm_avg4_mavg_ce10' if (args.src, args.w) == ('fm_taps_avg4', 0.5) and not args.log else f'{args.src}_mixce{args.w:g}')
         wmap = torch.tensor(args.w)
     out = SE_WAV / name_out / args.split
     out.mkdir(parents=True, exist_ok=True)
@@ -84,7 +84,11 @@ def fuse(args):
         n = min(len(gen), len(c))
         G = torch.stft(torch.from_numpy(gen[:n]), 512, 128, window=win, return_complex=True)
         C = torch.stft(torch.from_numpy(c[:n]), 512, 128, window=win, return_complex=True)
-        Y = ((1 - wmap) * G.abs() + wmap * C.abs()) * torch.exp(1j * G.angle())
+        if args.log:   # 対数振幅で平均（w=0.5 なら幾何平均）。script 84 の fm_ceps_geo と同じ
+            mag = torch.exp((1 - wmap) * torch.log(G.abs() + 1e-7) + wmap * torch.log(C.abs() + 1e-7))
+        else:
+            mag = (1 - wmap) * G.abs() + wmap * C.abs()
+        Y = mag * torch.exp(1j * G.angle())
         sf.write(out / name, torch.istft(Y, 512, 128, window=win, length=n).numpy().astype(np.float32), sr)
     print(f'done → {out}')
 
@@ -130,6 +134,7 @@ def main():
     ap.add_argument('--w_lo', type=float, default=None, help='fuse: 4 kHz 未満の CE-SE 側の重み（指定すると帯域別）')
     ap.add_argument('--w_hi', type=float, default=0.5, help='fuse: 4 kHz 以上の CE-SE 側の重み')
     ap.add_argument('--out', default='')
+    ap.add_argument('--log', action='store_true', help='fuse: 振幅ではなく対数振幅で平均する')
     ap.add_argument('--se', default='ce10.0', help='fuse: Whisper 用 SE（script 66 の load_any_se の名前）')
     args = ap.parse_args()
     {'select': select, 'fuse': fuse, 'variants': variants}[args.stage](args)

@@ -106,6 +106,10 @@ TRANSFER = ['tr_ctrl', 'tr_ghost', 'tr_ghost_div']
 SETS.update({'wise_dev': ['taps', 'ce10.0', 'avg_taps_ce10.0', 'mavg_taps_ce10.0'] + WISE,
              'ceps': ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + CEPS,
              'transfer': ['taps', 'ce10.0'] + TRANSFER + ['fm_taps_avg4', 'fm_avg4_mavg_ce10'] + [f'fm_avg4_mavg_{t}' for t in TRANSFER]})
+LOGFUSE = ['fm_avg4_lmavg_ce10', 'fm_avg4_lmavg_wise', 'fm_avg4_mavg_wise']
+SETS['logfuse_dev'] = ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + LOGFUSE
+SETS['logfuse'] = ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_ceps_geo', 'fm_avg4_mavg_wise', 'fm_avg4_lmavg_wise', 'wise_a0.7']
+ALL_CONDS += ['fm_avg4_lmavg_ce10', 'fm_avg4_lmavg_wise']
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
 ALL_CONDS += [f'fm_taps_avg4_lo{l}hi{h}' for l in ('0.25', '0.5', '0.75') for h in ('0', '0.25', '0.5', '0.75')]
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
