@@ -47,14 +47,14 @@ function tbl(hdrs, rows, ws) {
 }
 const cap = (t) => p([txt(t, { size: 17 })], { alignment: AlignmentType.CENTER, keepLines: true, spacing: { before: 30, after: 140 } });
 const capTop = (t) => p([txt(t, { size: 17 })], { alignment: AlignmentType.CENTER, keepNext: true, keepLines: true, spacing: { before: 100, after: 40 } });
-const ref = (t) => p([txt(t, { size: 16 })], { spacing: { after: 10, line: 250 } });
+const ref = (t) => p([txt(t, { size: 16 })], { spacing: { after: 0, line: 230 } });
 
 const content = [
   // ────────────────────────────────────────────────
   h1("1. はじめに"),
   p([txt("喉マイクは頸部の振動を接触型センサで捉えるため環境騒音に強いが、軟組織の伝搬特性により高域が大きく失われる。喉マイクと気導マイクの同時収録コーパスTAPS[1]では喉マイクが8 kHzで収録されており、4 kHz以上は収録時点から存在しない。Whisper-small[2]で喉マイク音声をそのまま認識すると文字誤り率（CER）は0.446に達する。")]),
-  p([txt("前処理としての音声強調（SE）は有力な対策であるが、知覚品質の改善が音声認識（ASR）の改善を保証しないことが知られている[3]。この乖離に対し、凍結したASRの損失でSEを学習する方法が提案されてきた[4,5]。著者らも喉マイクSEをWhisper-smallの交差エントロピー（CE）損失で追加学習し、WhisperではCERが下がる一方、入力特徴量の異なるCTC型認識器では悪化することを報告した。すなわちASR損失で学習したSEは、損失に用いた認識器の入力特徴量に特化する。")]),
-  p([txt("一方、喉マイクの問題は雑音の混入ではなく帯域や子音の欠落であり、欠けた成分を補う必要がある。大規模音声で事前学習した生成モデル[6]は、入力が持たない成分を自然な音声として生成できる。体内伝導マイクではこの種の生成モデルの適応が有効との報告がある[17]が、評価は単一の認識器に限られる。また、生成的な帯域拡張や声質変換が喉マイク音声のCERを悪化させたという報告もある[8]。")]),
+  p([txt("前処理としての音声強調（SE）は有力な対策であるが、知覚品質の改善が音声認識（ASR）の改善を保証しないことが知られている[3]。この乖離に対し、凍結したASRの損失でSEを学習する方法が提案されてきた[4,5]。しかし、損失に用いた認識器以外への効果は十分に調べられていない。本稿の実験でも、Whisper-smallの交差エントロピー（CE）損失で学習した喉マイクSEは、WhisperではCERを下げる一方、入力特徴量の異なる認識器では悪化した（4.1節）。ASR損失で学習したSEは、損失に用いた認識器の入力特徴量に特化しうる。")]),
+  p([txt("一方、喉マイクの問題は雑音の混入ではなく帯域や子音の欠落であり、欠けた成分を補う必要がある。大規模音声で事前学習した生成モデル[6]は、入力が持たない成分を自然な音声として生成できる。体内伝導マイクではこの種の生成モデルの適応が有効との報告がある[16]が、評価は単一の認識器に限られる。また、生成的な帯域拡張や声質変換が喉マイク音声のCERを悪化させたという報告もある[8]。")]),
   p([txt("本稿では対象をWhisperと同じ対数メルスペクトログラムを入力とする認識器（以下Whisper系）に定め、損失と設定の選択にはWhisper-smallのみを用い、他のWhisper系5種を評価専用とする。そのうえで次の3点を示す。(1) 事前学習済みのflow matching生成モデルをTAPSで適応すると、入力特徴量の異なる認識器を含む9種すべてでCERが下がり、効果は事前学習に由来する。(2) 生成モデルの複数サンプルの振幅平均に、Whisper用SEの出力を振幅で融合すると、学習に用いていないWhisper系にもさらに上乗せが得られる。(3) 生成モデル自体をWhisperの損失で学習する方法は失敗し、融合の上乗せは帯域の両側から生じ、他系統の認識器への害は元々存在しない4 kHz以上の成分から生じる。")]),
 
   // ────────────────────────────────────────────────
@@ -66,7 +66,7 @@ const content = [
   h2("2.2 Whisper用SE"),
   p([txt("TAPS論文[1]のSE-Conformer（1210万パラメータ、以下TAPS SE）を初期値とし、次の損失で追加学習したモデル（以下CE-SE）を用いる。")]),
   eqp([mi("L"), mo(" = "), mi("L"), sub("recon"), mo("("), mi("ŝ"), mo(", "), mi("s"), sub("air"), mo(") + "), mi("λ"), mo(" CE(Whisper("), mi("ŝ"), mo("), "), mi("y"), mo(")")]),
-  p([mi("ŝ"), txt("はSE出力、"), mi("s"), sub("air"), txt("は気導音声、"), mi("y"), txt("は正解テキスト、"), mi("L"), sub("recon"), txt("はL1波形損失と多重解像度STFT損失の和である。Whisper-smallは凍結し、"), mi("λ"), txt(" = 10（devのCERで選択）とした。")]),
+  p([mi("ŝ"), txt("はSE出力、"), mi("s"), sub("air"), txt("は気導音声、"), mi("y"), txt("は正解テキスト、"), mi("L"), sub("recon"), txt("はL1波形損失と多重解像度STFT損失の和である。Whisper-smallは凍結し、"), mi("λ"), txt("はdevのCERで{0, 0.1, 0.5, 1, 2, 5, 10}から選んで10とした。")]),
   h2("2.3 振幅融合"),
   p([txt("生成モデルの出力"), mi("G"), txt("（"), mi("N"), txt(" = 4の平均）とCE-SEの出力"), mi("C"), txt("を、STFT（512点、シフト128点）の振幅で重み付き平均し、位相は生成モデルのものを用いる。")]),
   eqp([mi("Y"), mo(" = {(1 − "), mi("w"), mo(")|"), mi("G"), mo("| + "), mi("w"), mo("|"), mi("C"), mo("|} exp(j∠"), mi("G"), mo(")")]),
@@ -75,12 +75,12 @@ const content = [
   // ────────────────────────────────────────────────
   h1("3. 実験条件"),
   h2("3.1 データと学習"),
-  p([txt("TAPS[1]の話者独立な分割（train 40話者・dev 10話者・test 10話者、各話者100発話）を用いた。生成モデルはtrainの4,000対で20k step追加学習した（batch 8、6.14秒の切り出し、学習率10"), sup("−4"), txt("、EMA、32ビット浮動小数点）。モデルの選択には最終ステップを用い、testを見て選んでいない。CE-SEは文献[10]の設定（Adam、学習率3×10"), sup("−4"), txt("、batch 4）で学習した。")]),
+  p([txt("TAPS[1]の話者独立な分割（train 40話者・dev 10話者・test 10話者、各話者100発話）を用いた。生成モデルはtrainの4,000対で20k step追加学習した（batch 8、6.14秒の切り出し、学習率10"), sup("−4"), txt("、EMA、32ビット浮動小数点）。モデルの選択には最終ステップを用い、testを見て選んでいない。CE-SEはAdam（学習率3×10"), sup("−4"), txt("、batch 4）で最大50エポック学習し、devの損失でearly stoppingを行った。15秒を超える発話は学習から除外した。")]),
   h2("3.2 比較手法"),
-  p([txt("TAPS SE、CE-SEに加え、2つの既存手法を比較した。SSL-MSEは、SE出力と気導音声のWavLM-Large[11]全層の表現の二乗誤差を再構成損失に加えてTAPS SEを追加学習したもので、Satoら[5]の方式に従う。Dissen型は、凍結したASRの損失で前段を学習する方法[4]に倣い、喉マイクの対数メルスペクトログラムを入力・出力とするU-Net（約700万パラメータ）を、Whisper-smallのCEと気導音声の対数メルへのL1損失で学習したものである。")]),
+  p([txt("TAPS SE、CE-SEに加え、2つの既存手法を比較した。SSL-MSEは、SE出力と気導音声のWavLM-Large[10]全層の表現の二乗誤差を再構成損失に加えてTAPS SEを追加学習したもので、Satoら[5]の方式に従う。Dissen型は、凍結したASRの損失で前段を学習する方法[4]に倣い、喉マイクの対数メルスペクトログラムを入力・出力とするU-Net（約700万パラメータ）を、Whisper-smallのCEと気導音声の対数メルへのL1損失で学習したものである。")]),
   h2("3.3 認識器と評価"),
   p([txtB("Whisper系．"), txt("Whisper-small（損失と選択に使用）、Whisper-base、Whisper-medium、Whisper-large-v3-turbo、TAPSの喉マイク音声でファインチューニングしたWhisper-small（FT Whisper）、Qwen3-ASR-1.7Bの6種である。Qwen3-ASRのエンコーダはWhisperと異なるが、入力は同形式の対数メル（128次元）である。")]),
-  p([txtB("入力特徴量の異なる認識器．"), txt("Whisper系への特化を確認する対照として、波形入力のCTC型であるMMS-1B[12]とXLS-R[13]（韓国語で追加学習したもの）、Kaldi型のフィルタバンクを入力とするZipformer[14]を用いた。")]),
+  p([txtB("入力特徴量の異なる認識器．"), txt("Whisper系への特化を確認する対照として、波形入力のCTC型であるMMS-1B[11]とXLS-R[12]（韓国語で追加学習したもの）、Kaldi型のフィルタバンクを入力とするZipformer[13]を用いた。")]),
   p([txtB("指標．"), txt("test 1,000発話で、正解と認識結果の双方から句読点を除いたCERを発話ごとに求め（1.0で打ち切り）、平均した。Zipformerは空白を含めたCERである。同一話者の発話は独立でないため、話者ごとの平均CERを単位とするWilcoxon符号順位検定（"), mi("n"), txt(" = 10、最小の"), mi("p"), txt(" = 0.002）を用いた。")]),
 
   // ────────────────────────────────────────────────
@@ -106,7 +106,7 @@ const content = [
   ),
   p([], { spacing: { after: 60 } }),
   new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 60, after: 0 }, keepNext: true,
-    children: [new ImageRun({ type: "png", data: fs.readFileSync(__dirname + "/figures/fusion_relative.png"), transformation: { width: 290, height: 264 } })] }),
+    children: [new ImageRun({ type: "png", data: fs.readFileSync(__dirname + "/figures/fusion_relative.png"), transformation: { width: 250, height: 228 } })] }),
   cap("図1: TAPS SE比のCER変化（破線より上がWhisper系）"),
 
   h2("4.2 サンプル平均と融合"),
@@ -115,7 +115,7 @@ const content = [
   p([txt("Dissen型は80次元メルのWhisperにのみ適用できるため、全条件をtransformers版Whisperの貪欲復号で認識し直して比較した。Whisper-smallでTAPS SE 0.237、Dissen型 0.239、融合 0.169であり、Dissen型はWhisper-base・medium・FT WhisperでもTAPS SEより悪かった。喉マイクのメルのみを入力とするため、欠けた帯域を補えなかったと考えられる。")]),
 
   h2("4.3 生成モデル自体をWhisperに合わせる試み"),
-  p([txt("融合の代わりに、生成モデル自体をWhisper-smallの損失で学習する方法を試した（表2）。途中時刻"), mi("t"), txt("から1段で得られる完成音の見積もり"), mi("x̂"), sub("1"), mo(" = "), mi("x"), sub("t"), mo(" + (1 − "), mi("t"), mo(")"), mi("v̂"), txt("にCEをかけて追加学習すると、見積もりのCEは下がるが、20段で生成した出力のCERは悪化した。CEなしで同じ手順をとると悪化しないため、原因はCE損失にある。最終段のみに損失をかけるDRaFT-K[15]型の学習、生成出力に小さな補正モジュールを加える方法も効果がなかった。CE-SEを融合後の音に対するCEで再学習すると、Whisper系では一貫して改善したが、幅は0.2〜1.9%にとどまった。")]),
+  p([txt("融合の代わりに、生成モデル自体をWhisper-smallの損失で学習する方法を試した（表2）。途中時刻"), mi("t"), txt("から1段で得られる完成音の見積もり"), mi("x̂"), sub("1"), mo(" = "), mi("x"), sub("t"), mo(" + (1 − "), mi("t"), mo(")"), mi("v̂"), txt("にCEをかけて追加学習すると、見積もりのCEは下がるが、20段で生成した出力のCERは悪化した。CEなしで同じ手順をとると悪化しないため、原因はCE損失にある。最終段のみに損失をかけるDRaFT-K[14]型の学習、生成出力に小さな補正モジュールを加える方法も効果がなかった。CE-SEを融合後の音に対するCEで再学習すると、Whisper系では一貫して改善したが、幅は0.2〜1.9%にとどまった。")]),
   capTop("表2: 生成モデルをWhisperに合わせる試み（W-small）"),
   tbl(
     ["方法", "結果"],
@@ -132,7 +132,7 @@ const content = [
   p([], { spacing: { after: 60 } }),
 
   h2("4.4 融合の分解"),
-  p([txt("CE-SEの何がWhisper系に効くのかを、融合の作り方を変えて調べた（表3）。CE-SEの出力には250 Hz間隔の櫛状のピークが現れることが分かっている[10]が、このピークをノッチで除いてから融合しても結果はほぼ変わらず、上乗せの原因ではなかった。4 kHz未満のみ、または4 kHz以上のみを融合すると、Whisper系の上乗せはそれぞれ約半分になり、両帯域から生じていた。一方、Zipformerは4 kHz未満のみの融合では悪化せず、悪化の原因はCE-SEが作る4 kHz以上の成分であった。喉マイクに元々存在しない帯域に、Whisper向けに作られた成分が、Kaldi型の特徴量を用いる認識器には害となっている。帯域ごとに重みを変えた12通りをdevで比較しても差は1%前後で、"), mi("w"), txt(" = 0.5の一様な重みで十分であった。")]),
+  p([txt("CE-SEの何がWhisper系に効くのかを、融合の作り方を変えて調べた（表3）。CE-SEの出力には、3〜7.75 kHzの250 Hz間隔の位置に鋭いピークが並ぶ櫛状の成分が現れる。このピークをノッチで除いてから融合しても結果はほぼ変わらず、上乗せの原因ではなかった。4 kHz未満のみ、または4 kHz以上のみを融合すると、Whisper系の上乗せはそれぞれ約半分になり、両帯域から生じていた。一方、Zipformerは4 kHz未満のみの融合では悪化せず、悪化の原因はCE-SEが作る4 kHz以上の成分であった。喉マイクに元々存在しない帯域に、Whisper向けに作られた成分が、Kaldi型の特徴量を用いる認識器には害となっている。帯域ごとに重みを変えた12通りをdevで比較しても差は1%前後で、"), mi("w"), txt(" = 0.5の一様な重みで十分であった。")]),
   capTop("表3: 融合の分解（test CER）"),
   tbl(
     ["認識器", "生成×4", "融合", "櫛除去", "<4 kHz", "≥4 kHz"],
@@ -148,7 +148,7 @@ const content = [
   p([], { spacing: { after: 60 } }),
 
   h2("4.5 気導音声との距離"),
-  p([txt("ASRの学習に用いていない表現であるHuBERT-Large[16]の全層について、同一発話の気導音声とのフレームごとのコサイン距離を求めた。これまでに評価した17条件をまたぐと、この距離は9認識器のうち最も悪化した認識器のCER変化と強く相関した（Spearman "), mi("ρ"), txt(" = 0.92）。一方、Whisper系のCERとの相関は弱く（Whisper-small "), mi("ρ"), txt(" = 0.37）、CE-SEのように気導音声から離れる変化でもWhisper系のCERは下がる。融合はこの両者を組み合わせており、距離は生成×4の0.092から0.111へ増える。")]),
+  p([txt("ASRの学習に用いていない表現であるHuBERT-Large[15]の全層について、同一発話の気導音声とのフレームごとのコサイン距離を求めた。これまでに評価した17条件をまたぐと、この距離は9認識器のうち最も悪化した認識器のCER変化と強く相関した（Spearman "), mi("ρ"), txt(" = 0.92）。一方、Whisper系のCERとの相関は弱く（Whisper-small "), mi("ρ"), txt(" = 0.37）、CE-SEのように気導音声から離れる変化でもWhisper系のCERは下がる。融合はこの両者を組み合わせており、距離は生成×4の0.092から0.111へ増える。")]),
 
   // ────────────────────────────────────────────────
   h1("5. 考察"),
@@ -172,14 +172,13 @@ const content = [
   ref("[7] J. Hauret et al., “Vibravox: A dataset of French speech captured with body-conduction audio sensors,” Speech Communication, 2025."),
   ref("[8] 山中 涼雅 ほか, “Zero-shot音声変換を用いた咽喉マイク音声の気導音復元に関する初期検討,” 音講論集, 1-Q-42, 2026（秋）."),
   ref("[9] Y. Lipman et al., “Flow matching for generative modeling,” Proc. ICLR, 2023."),
-  ref("[10] 春日, “ASR損失で学習した喉マイク音声強調の効果と汎化範囲,” 卒業論文（準備中）, 2026."),
-  ref("[11] S. Chen et al., “WavLM: Large-scale self-supervised pre-training for full stack speech processing,” IEEE JSTSP, vol. 16, 2022."),
-  ref("[12] V. Pratap et al., “Scaling speech technology to 1,000+ languages,” JMLR, vol. 25, 2024."),
-  ref("[13] A. Babu et al., “XLS-R: Self-supervised cross-lingual speech representation learning at scale,” Proc. Interspeech, 2022."),
-  ref("[14] Z. Yao et al., “Zipformer: A faster and better encoder for automatic speech recognition,” Proc. ICLR, 2024."),
-  ref("[15] K. Clark et al., “Directly fine-tuning diffusion models on differentiable rewards,” Proc. ICLR, 2024."),
-  ref("[16] W.-N. Hsu et al., “HuBERT: Self-supervised speech representation learning by masked prediction of hidden units,” IEEE/ACM TASLP, vol. 29, 2021."),
-  ref("[17] J. Hauret et al., arXiv:2508.02974, 2025."),
+  ref("[10] S. Chen et al., “WavLM: Large-scale self-supervised pre-training for full stack speech processing,” IEEE JSTSP, vol. 16, 2022."),
+  ref("[11] V. Pratap et al., “Scaling speech technology to 1,000+ languages,” JMLR, vol. 25, 2024."),
+  ref("[12] A. Babu et al., “XLS-R: Self-supervised cross-lingual speech representation learning at scale,” Proc. Interspeech, 2022."),
+  ref("[13] Z. Yao et al., “Zipformer: A faster and better encoder for automatic speech recognition,” Proc. ICLR, 2024."),
+  ref("[14] K. Clark et al., “Directly fine-tuning diffusion models on differentiable rewards,” Proc. ICLR, 2024."),
+  ref("[15] W.-N. Hsu et al., “HuBERT: Self-supervised speech representation learning by masked prediction of hidden units,” IEEE/ACM TASLP, vol. 29, 2021."),
+  ref("[16] J. Hauret et al., arXiv:2508.02974, 2025."),
 ];
 
 const doc = new Document({

@@ -44,8 +44,9 @@ Whisper-small\cite{whisper}で喉マイク音声をそのまま認識すると�
 
 前処理としての音声強調（SE）は有力な対策であるが、知覚品質の改善が音声認識（ASR）の改善を保証しないことが知られている\cite{ochiai2024}。
 この乖離に対し、凍結したASRの損失でSEを学習する方法が提案されてきた\cite{dissen2024,sato2025}。
-著者も喉マイクSEをWhisper-smallの交差エントロピー（CE）損失で追加学習し、WhisperではCERが下がる一方、入力特徴量の異なるCTC型認識器では悪化することを示した\cite{kasuga2026}。
-すなわちASR損失で学習したSEは、損失に用いた認識器の入力特徴量に特化する。
+しかし、損失に用いた認識器以外への効果は十分に調べられていない。
+本稿の実験でも、Whisper-smallの交差エントロピー（CE）損失で学習した喉マイクSEは、WhisperではCERを下げる一方、入力特徴量の異なる認識器では悪化した（4.1節）。
+ASR損失で学習したSEは、損失に用いた認識器の入力特徴量に特化しうる。
 
 一方、喉マイクの問題は雑音の混入ではなく帯域や子音の欠落であり、欠けた成分を補う必要がある。
 大規模音声で事前学習した生成モデル\cite{ku2024}は、入力が持たない成分を自然な音声として生成できる。
@@ -73,12 +74,12 @@ NVIDIAが公開しているflow matching\cite{lipman2023}型の音声復元モ�
 \end{equation}
 
 \subsection{Whisper用SE}
-TAPS論文\cite{taps}のSE-Conformer（1210万パラメータ、以下TAPS SE）を初期値とし、次の損失で追加学習したモデル（以下CE-SE）を用いる\cite{kasuga2026}。
+TAPS論文\cite{taps}のSE-Conformer（1210万パラメータ、以下TAPS SE）を初期値とし、次の損失で追加学習したモデル（以下CE-SE）を用いる。
 \begin{equation}
   L = L_\mathrm{recon}(\hat{s}, s_\mathrm{air}) + \lambda\, \mathrm{CE}(\mathrm{Whisper}(\hat{s}), y)
 \end{equation}
 $\hat{s}$はSE出力、$s_\mathrm{air}$は気導音声、$y$は正解テキスト、$L_\mathrm{recon}$はL1波形損失と多重解像度STFT損失の和である。
-Whisper-smallは凍結し、$\lambda=10$（devのCERで選択）とした。
+Whisper-smallは凍結し、$\lambda$はdevのCERで$\{0, 0.1, 0.5, 1, 2, 5, 10\}$から選んで$\lambda=10$とした。
 
 \subsection{振幅融合}
 生成モデルの出力$G$（$N=4$の平均）とCE-SEの出力$C$を、STFT（512点、シフト128点）の振幅で重み付き平均し、位相は生成モデルのものを用いる。
@@ -94,7 +95,7 @@ $w$はdevでWhisper-smallのCERのみを見て$\{0.25, 0.5, 0.75\}$から選び�
 TAPS\cite{taps}の話者独立な分割（train 40話者・dev 10話者・test 10話者、各話者100発話）を用いた。
 生成モデルはtrainの4,000対で20k step追加学習した（batch 8、6.14秒の切り出し、学習率$10^{-4}$、EMA、32ビット浮動小数点）。
 モデルの選択には最終ステップを用い、testを見て選んでいない。
-CE-SEは文献\cite{kasuga2026}の設定（Adam、学習率$3\times10^{-4}$、batch 4）で学習した。
+CE-SEはAdam（学習率$3\times10^{-4}$、batch 4）で最大50エポック学習し、devの損失でearly stoppingを行った。15秒を超える発話は学習から除外した。
 
 \subsection{比較手法}
 TAPS SE、CE-SEに加え、2つの既存手法を比較した。
@@ -199,7 +200,7 @@ CE-SEを融合後の音に対するCEで再学習すると、Whisper系では一
 
 \subsection{融合の分解}
 CE-SEの何がWhisper系に効くのかを、融合の作り方を変えて調べた（表\ref{tab:decomp}）。
-CE-SEの出力には250~Hz間隔の櫛状のピークが現れることが分かっている\cite{kasuga2026}が、このピークをノッチで除いてから融合しても結果はほぼ変わらず、上乗せの原因ではなかった。
+CE-SEの出力には、3〜7.75~kHzの250~Hz間隔の位置に鋭いピークが並ぶ櫛状の成分が現れる。このピークをノッチで除いてから融合しても結果はほぼ変わらず、上乗せの原因ではなかった。
 4~kHz未満のみ、または4~kHz以上のみを融合すると、Whisper系の上乗せはそれぞれ約半分になり、両帯域から生じていた。
 一方、Zipformerは4~kHz未満のみの融合では悪化せず、悪化の原因はCE-SEが作る4~kHz以上の成分であった。
 喉マイクに元々存在しない帯域に、Whisper向けに作られた成分が、Kaldi型の特徴量を用いる認識器には害となっている。
