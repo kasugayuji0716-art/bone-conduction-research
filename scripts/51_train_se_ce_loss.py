@@ -191,6 +191,9 @@ def main():
                         help='学習時だけ Whisper の各層の出力に dropout（Ghost Networks, Li et al. AAAI 2020）')
     parser.add_argument('--layerdrop', type=float, default=0.0,
                         help='学習時だけ Whisper の各層を確率的に飛ばす（残差だけ通す）')
+    parser.add_argument('--branch_dropout', type=float, default=0.0,
+                        help='学習時だけ Whisper 本来の位置（注意機構・FFN の出力側、残差の手前）に dropout。--ghost より穏やか')
+    parser.add_argument('--branch_enc_only', action='store_true', help='--branch_dropout をエンコーダだけにかける')
     parser.add_argument('--input_div', action='store_true',
                         help='学習時だけ Whisper に入れる前の波形を変形（Input Diversity, Xie et al. CVPR 2019）: ±3 dB のゲイン、0〜10 ms の時間シフト')
     args = parser.parse_args()
@@ -254,6 +257,14 @@ def main():
             layer.register_forward_hook(perturb, with_kwargs=True)
         print(f'Ghost Whisper: dropout={args.ghost}, layerdrop={args.layerdrop}（学習時のみ）')
 
+    if args.branch_dropout > 0:
+        for layer in list(whisper.model.encoder.layers) + ([] if args.branch_enc_only else list(whisper.model.decoder.layers)):
+            q = args.branch_dropout
+            layer.dropout = q; layer.activation_dropout = q; layer.self_attn.dropout = q
+            if hasattr(layer, 'encoder_attn'):
+                layer.encoder_attn.dropout = q
+        print(f'Branch dropout: {args.branch_dropout}（{"エンコーダのみ" if args.branch_enc_only else "全層"}、学習時のみ）')
+
     def diversify(wav):
         if not (args.input_div and ghost['on']):
             return wav
@@ -313,6 +324,8 @@ def main():
 
             if args.lambda_asr > 0:
                 ghost['on'] = True
+                if args.branch_dropout > 0:
+                    whisper.train()
                 with torch.amp.autocast('cuda', dtype=amp_dtype):
                     mel_se = log_mel_fn(diversify(se_t))
                     encoder_out = whisper.model.encoder(mel_se)
@@ -322,6 +335,7 @@ def main():
                     )
                     l_ce = decoder_out.loss
                 ghost['on'] = False
+                whisper.eval()
             else:
                 l_ce = torch.zeros(1, device=DEVICE)
 
