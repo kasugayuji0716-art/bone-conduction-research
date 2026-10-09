@@ -191,6 +191,8 @@ def main():
                         help='学習時だけ Whisper の各層の出力に dropout（Ghost Networks, Li et al. AAAI 2020）')
     parser.add_argument('--layerdrop', type=float, default=0.0,
                         help='学習時だけ Whisper の各層を確率的に飛ばす（残差だけ通す）')
+    parser.add_argument('--resid_scale', type=float, default=0.0,
+                        help='学習時だけ Whisper の各層が残差に足す分を U(1-g, 1+g) 倍（Ghost Networks の skip connection erosion）')
     parser.add_argument('--branch_dropout', type=float, default=0.0,
                         help='学習時だけ Whisper 本来の位置（注意機構・FFN の出力側、残差の手前）に dropout。--ghost より穏やか')
     parser.add_argument('--branch_enc_only', action='store_true', help='--branch_dropout をエンコーダだけにかける')
@@ -242,7 +244,7 @@ def main():
 
     # 学習時だけ Whisper を揺らす（凍結したまま、擬似的に別のモデルを毎ステップ作る）。検証・選択は揺らさない
     ghost = {'on': False}
-    if args.ghost > 0 or args.layerdrop > 0:
+    if args.ghost > 0 or args.layerdrop > 0 or args.resid_scale > 0:
         def perturb(module, inputs, kwargs, output):
             if not ghost['on']:
                 return output
@@ -252,10 +254,12 @@ def main():
                 h = h_in
             elif args.ghost > 0:
                 h = F.dropout(h, p=args.ghost, training=True)
+            if args.resid_scale > 0:
+                h = h_in + (1 + (torch.rand((), device=h.device) * 2 - 1) * args.resid_scale) * (h - h_in)
             return (h,) + tuple(output[1:]) if isinstance(output, tuple) else h
         for layer in list(whisper.model.encoder.layers) + list(whisper.model.decoder.layers):
             layer.register_forward_hook(perturb, with_kwargs=True)
-        print(f'Ghost Whisper: dropout={args.ghost}, layerdrop={args.layerdrop}（学習時のみ）')
+        print(f'Ghost Whisper: dropout={args.ghost}, layerdrop={args.layerdrop}, resid_scale={args.resid_scale}（学習時のみ）')
 
     if args.branch_dropout > 0:
         for layer in list(whisper.model.encoder.layers) + ([] if args.branch_enc_only else list(whisper.model.decoder.layers)):

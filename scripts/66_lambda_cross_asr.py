@@ -110,6 +110,10 @@ LOGFUSE = ['fm_avg4_lmavg_ce10', 'fm_avg4_lmavg_wise', 'fm_avg4_mavg_wise']
 SETS['logfuse_dev'] = ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + LOGFUSE
 SETS['logfuse'] = ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_ceps_geo', 'fm_avg4_mavg_wise', 'fm_avg4_lmavg_wise', 'wise_a0.7']
 ALL_CONDS += ['fm_avg4_lmavg_ce10', 'fm_avg4_lmavg_wise']
+# script 51 の穏やかな揺らし（2026-10-09 較正: 揺らした Whisper の CE が元の 1.5 倍以内）
+TRANSFER2 = ['tr_resid0.2', 'tr_encdrop0.02']
+SETS['transfer2'] = ['taps', 'ce10.0', 'tr_ctrl'] + TRANSFER2 + ['fm_taps_avg4', 'fm_avg4_mavg_tr_ctrl'] + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
+ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
 ALL_CONDS += [f'fm_taps_avg4_lo{l}hi{h}' for l in ('0.25', '0.5', '0.75') for h in ('0', '0.25', '0.5', '0.75')]
 ALL_CONDS += ['distill_m4_med', 'distill_m4_med_dev', 'distill_m4_med_dev_mag',
