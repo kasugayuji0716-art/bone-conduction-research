@@ -41,11 +41,12 @@ def _state(path):
 
 def wise(args):
     s64 = import_module('64_retranscribe_all')
-    a, b = _state(s64.SE_CKPTS['taps']), _state(s64.SE_CKPTS['ce10.0'])
+    src = s64.SE_CKPTS.get(args.wise_src, BASE_DIR / 'checkpoints' / args.wise_src / 'best.th')
+    a, b = _state(s64.SE_CKPTS['taps']), _state(src)
     assert a.keys() == b.keys()
     for al in ALPHAS:
         st = {k: ((1 - al) * a[k] + al * b[k]) if b[k].is_floating_point() else b[k] for k in b}
-        out = BASE_DIR / 'checkpoints' / f'wise_a{al:g}'
+        out = BASE_DIR / 'checkpoints' / f'{args.wise_prefix}_a{al:g}'
         out.mkdir(parents=True, exist_ok=True)
         torch.save(st, out / 'best.th')
         print('saved', out / 'best.th')
@@ -99,6 +100,8 @@ def main():
     ap.add_argument('--src', default='fm_taps_avg4', help='ceps: 生成モデル側の出力')
     ap.add_argument('--se', default='ce10.0', help='ceps: Whisper 用 SE')
     ap.add_argument('--K', type=int, default=30, help='ceps: 包絡とみなすケプストラムの次数')
+    ap.add_argument('--wise_src', default='ce10.0', help='wise: TAPS と内挿する相手（SE_CKPTS の名前か checkpoints/ の名前）')
+    ap.add_argument('--wise_prefix', default='wise', help='wise: 出力 checkpoints/<prefix>_a<α>')
     args = ap.parse_args()
     {'wise': wise, 'ceps': ceps}[args.stage](args)
 

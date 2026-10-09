@@ -113,6 +113,12 @@ ALL_CONDS += ['fm_avg4_lmavg_ce10', 'fm_avg4_lmavg_wise']
 # script 51 の穏やかな揺らし（2026-10-09 較正: 揺らした Whisper の CE が元の 1.5 倍以内）
 TRANSFER2 = ['tr_resid0.2', 'tr_encdrop0.02']
 SETS['transfer2'] = ['taps', 'ce10.0', 'tr_ctrl'] + TRANSFER2 + ['fm_taps_avg4', 'fm_avg4_mavg_tr_ctrl'] + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
+# 内挿の詰め（2026-10-09）: tr_ctrl から内挿 / 融合した状態で α を選ぶ（対数振幅、生成4平均）
+WISE_CTRL = [f'wisectrl_a{a:g}' for a in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)]
+LFUSE_ALPHA = [f'fm_avg4_lmavg_wise_a{a:g}' for a in (0.3, 0.5, 0.7, 0.9)] + [f'fm_avg4_lmavg_wisectrl_a{a:g}' for a in (0.3, 0.5, 0.7, 0.9)]
+SETS['wisectrl_dev'] = ['taps', 'tr_ctrl', 'wise_a0.7'] + WISE_CTRL
+SETS['lfuse_alpha_dev'] = ['fm_taps_avg4', 'fm_avg4_lmavg_wise'] + LFUSE_ALPHA
+ALL_CONDS += WISE_CTRL + LFUSE_ALPHA
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
 ALL_CONDS += [f'fm_taps_avg4_lo{l}hi{h}' for l in ('0.25', '0.5', '0.75') for h in ('0', '0.25', '0.5', '0.75')]
