@@ -120,6 +120,9 @@ LFUSE_ALPHA = [f'fm_avg4_lmavg_wise_a{a:g}' for a in (0.3, 0.5, 0.7, 0.9)] + [f'
 SETS['wisectrl_dev'] = ['taps', 'tr_ctrl', 'wise_a0.7'] + WISE_CTRL
 SETS['lfuse_alpha_dev'] = ['fm_taps_avg4', 'fm_avg4_lmavg_wise'] + LFUSE_ALPHA
 ALL_CONDS += WISE_CTRL + LFUSE_ALPHA
+# VibraVox（仏語、別機種の喉マイク）で TAPS 学習済みの部品をそのまま使う（BCR_DATASET=vibravox）
+SETS['vbx'] = ['no_se', 'taps', 'ce10.0', 'wise_a0.7', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_avg4_lmavg_wise']
+ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
 ALL_CONDS += [f'fm_taps_avg4_lo{l}hi{h}' for l in ('0.25', '0.5', '0.75') for h in ('0', '0.25', '0.5', '0.75')]
@@ -149,6 +152,8 @@ SE_WAV = _DS.SE_WAV
 
 def load_any_se(name):
     """(B, T) → (B, T) の SE。TAPS/CE は script 64、Demucs/TSTNN は TAPS 公式実装（taps-baselines/models）"""
+    if name == 'no_se':   # 処理なし（喉マイクの音そのまま）
+        return lambda x: x
     if name in s64.SE_CKPTS:
         return s64.load_se(s64.SE_CKPTS[name])
     ckpt = BASE_DIR / 'checkpoints' / name / 'best.th'     # script 69 などで学習した SE-Conformer
