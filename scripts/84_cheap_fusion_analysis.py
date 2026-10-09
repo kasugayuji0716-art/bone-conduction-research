@@ -29,7 +29,7 @@ import torch
 BASE_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(BASE_DIR / 'scripts'))
 sys.path.insert(0, str(BASE_DIR / 'taps-baselines'))
-SE_WAV = BASE_DIR / 'data' / 'processed' / 'se_wav'
+from dataset_cfg import SE_WAV   # BCR_DATASET で切り替え
 ALPHAS = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 N_FFT, HOP = 512, 128
 

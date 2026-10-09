@@ -50,7 +50,8 @@ s64 = import_module('64_retranscribe_all')          # load_se, load_samples, SE_
 s65 = import_module('65_step0_residual_cutoff')     # load_asr, ASRS
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-OUT = BASE_DIR / 'results' / 'lambda_asr'
+import dataset_cfg as _DS
+OUT = BASE_DIR / 'results' / f'lambda_asr{_DS.SUFFIX}'
 LAMBDAS = ['0.0', '0.1', '0.5', '1.0', '2.0', '5.0', '10.0']
 CONDS = ['taps'] + [f'ce{l}' for l in LAMBDAS]
 OTHER_SE = ['demucs', 'tstnn']
@@ -143,7 +144,7 @@ def mag_avg(ref, other):
     return torch.istft(Y, 512, 128, window=_WIN, length=len(ref)).numpy().astype(np.float32)
 
 
-SE_WAV = BASE_DIR / 'data' / 'processed' / 'se_wav'
+SE_WAV = _DS.SE_WAV
 
 
 def load_any_se(name):

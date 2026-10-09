@@ -22,9 +22,10 @@ import urllib.request
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.parent
-TAPS_DIR = BASE_DIR / 'data' / 'raw' / 'taps'
+sys.path.insert(0, str(BASE_DIR / 'scripts'))
+from dataset_cfg import RAW_DIR as TAPS_DIR, SE_WAV as _SE_WAV   # BCR_DATASET で切り替え（学習は TAPS のみ）
 WORK = BASE_DIR / 'data' / 'processed' / 'nemo75'
-SE_WAV = BASE_DIR / 'data' / 'processed' / 'se_wav'
+SE_WAV = _SE_WAV
 EXAMPLES = BASE_DIR / 'third_party' / 'nemo_examples'
 RAW = 'https://raw.githubusercontent.com/NVIDIA-NeMo/Speech/main/examples/audio/'
 PRETRAINED = 'nvidia/sr_ssl_flowmatching_16k_430m'

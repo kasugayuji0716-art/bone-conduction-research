@@ -28,7 +28,14 @@ BASE_DIR = Path(__file__).parent.parent
 META = BASE_DIR / 'data' / 'raw' / 'taps' / 'metadata_test.csv'
 
 
+try:
+    from dataset_cfg import LOWER as _LOWER
+except ImportError:
+    _LOWER = False
+
 def norm(s, drop_space=False):
+    if _LOWER:   # VibraVox（仏語）のときだけ小文字にそろえる
+        s = s.lower()
     s = ''.join(c for c in s if not unicodedata.category(c).startswith('P'))
     s = re.sub(r'\s+', ' ', s).strip()
     return s.replace(' ', '') if drop_space else s

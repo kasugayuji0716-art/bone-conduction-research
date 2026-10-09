@@ -38,7 +38,7 @@ from importlib import import_module
 _r63 = import_module('63_rescore_normalized')
 norm, capped = _r63.norm, _r63.capped
 
-TAPS_DIR = BASE_DIR / 'data' / 'raw' / 'taps'
+from dataset_cfg import RAW_DIR as TAPS_DIR   # BCR_DATASET で切り替え（既定 TAPS）
 CKPT = BASE_DIR / 'checkpoints'
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 TAPS_SE_CONFIG = dict(hidden=64, conformer_dim=512, conformer_ffn_dim=64,

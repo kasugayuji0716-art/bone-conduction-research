@@ -120,20 +120,22 @@ def gen(limit, split):
 
 
 # ---------------- asr ----------------
+from dataset_cfg import LANG as _LANG, LANG_NAME as _LANG_NAME
+
 def load_asr(name):
     if name == 'whisper-large-v3-turbo':
         from faster_whisper import WhisperModel
         model = WhisperModel('large-v3-turbo', device=DEVICE, compute_type='float16')
 
         def run(wav):
-            segs, _ = model.transcribe(wav, language='ko', beam_size=5)
+            segs, _ = model.transcribe(wav, language=_LANG, beam_size=5)
             return ''.join(g.text for g in segs).strip()
         return run
     if name == 'qwen3-asr-1.7b':
         from qwen_asr import Qwen3ASRModel
         model = Qwen3ASRModel.from_pretrained('Qwen/Qwen3-ASR-1.7B', dtype=torch.bfloat16, device_map='cuda:0',
                                               max_inference_batch_size=8, max_new_tokens=256)
-        return lambda wav: model.transcribe(audio=(wav, SR), language='Korean')[0].text.strip()
+        return lambda wav: model.transcribe(audio=(wav, SR), language=_LANG_NAME)[0].text.strip()
     if name == 'zipformer-ko':
         import sherpa_onnx
         d = ZIPFORMER_DIR
@@ -156,7 +158,7 @@ def load_asr(name):
         model = WhisperModel(src, device=DEVICE, compute_type='float16')
 
         def run(wav):
-            segs, _ = model.transcribe(wav, language='ko', beam_size=5)
+            segs, _ = model.transcribe(wav, language=_LANG, beam_size=5)
             return ''.join(g.text for g in segs).strip()
         return run
     proc, model = s62.load_ctc(name, s62.CTC_MODELS[name])
