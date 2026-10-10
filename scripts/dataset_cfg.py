@@ -11,7 +11,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.parent
 DATASET = os.environ.get('BCR_DATASET', 'taps')
-assert DATASET in ('taps', 'vibravox'), DATASET
+assert DATASET == 'taps' or DATASET.startswith('vibravox'), DATASET   # vibravox_lvl: 音量・帯域を TAPS にそろえた版（script 86）
 RAW_DIR = BASE_DIR / 'data' / 'raw' / DATASET
 SUFFIX = '' if DATASET == 'taps' else f'_{DATASET}'
 SE_WAV = BASE_DIR / 'data' / 'processed' / f'se_wav{SUFFIX}'

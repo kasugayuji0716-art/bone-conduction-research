@@ -122,6 +122,7 @@ SETS['lfuse_alpha_dev'] = ['fm_taps_avg4', 'fm_avg4_lmavg_wise'] + LFUSE_ALPHA
 ALL_CONDS += WISE_CTRL + LFUSE_ALPHA
 # VibraVox（仏語、別機種の喉マイク）で TAPS 学習済みの部品をそのまま使う（BCR_DATASET=vibravox）
 SETS['vbx'] = ['no_se', 'taps', 'ce10.0', 'wise_a0.7', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_avg4_lmavg_wise']
+SETS['vbx_se'] = ['no_se', 'taps', 'ce10.0', 'wise_a0.7', 'wisectrl_a0.7']
 ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
