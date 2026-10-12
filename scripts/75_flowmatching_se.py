@@ -24,7 +24,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(BASE_DIR / 'scripts'))
 from dataset_cfg import RAW_DIR as TAPS_DIR, SE_WAV as _SE_WAV   # BCR_DATASET で切り替え（学習は TAPS のみ）
-WORK = BASE_DIR / 'data' / 'processed' / 'nemo75'
+from dataset_cfg import SUFFIX as _SUFFIX
+WORK = BASE_DIR / 'data' / 'processed' / f'nemo75{_SUFFIX}'
 SE_WAV = _SE_WAV
 EXAMPLES = BASE_DIR / 'third_party' / 'nemo_examples'
 RAW = 'https://raw.githubusercontent.com/NVIDIA-NeMo/Speech/main/examples/audio/'

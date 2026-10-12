@@ -42,7 +42,8 @@ def _state(path):
 def wise(args):
     s64 = import_module('64_retranscribe_all')
     src = s64.SE_CKPTS.get(args.wise_src, BASE_DIR / 'checkpoints' / args.wise_src / 'best.th')
-    a, b = _state(s64.SE_CKPTS['taps']), _state(src)
+    base = s64.SE_CKPTS.get(args.wise_base, BASE_DIR / 'checkpoints' / args.wise_base / 'best.th')
+    a, b = _state(base), _state(src)
     assert a.keys() == b.keys()
     for al in ALPHAS:
         st = {k: ((1 - al) * a[k] + al * b[k]) if b[k].is_floating_point() else b[k] for k in b}
@@ -102,6 +103,7 @@ def main():
     ap.add_argument('--K', type=int, default=30, help='ceps: 包絡とみなすケプストラムの次数')
     ap.add_argument('--wise_src', default='ce10.0', help='wise: TAPS と内挿する相手（SE_CKPTS の名前か checkpoints/ の名前）')
     ap.add_argument('--wise_prefix', default='wise', help='wise: 出力 checkpoints/<prefix>_a<α>')
+    ap.add_argument('--wise_base', default='taps', help='wise: 内挿の起点（α=0 側）')
     args = ap.parse_args()
     {'wise': wise, 'ceps': ceps}[args.stage](args)
 

@@ -27,7 +27,8 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
 BASE_DIR       = Path(__file__).parent.parent
-TAPS_DIR       = BASE_DIR / 'data' / 'raw' / 'taps'
+sys.path.insert(0, str(BASE_DIR / 'scripts'))
+from dataset_cfg import RAW_DIR as TAPS_DIR, LANG   # BCR_DATASET で切り替え（既定 TAPS）
 PRETRAINED_DIR = BASE_DIR / 'taps-baselines' / 'pretrained'
 
 _TAPS_BASELINES = BASE_DIR / 'taps-baselines'
@@ -230,13 +231,13 @@ def main():
     whisper.eval()
     for p in whisper.parameters():
         p.requires_grad_(False)
-    print('Whisper (full): frozen')
+    print(f'Whisper (full): frozen  language={LANG}')
 
     tokenizer = processor.tokenizer
     decoder_start_id = whisper.config.decoder_start_token_id
 
     # Force Korean
-    forced_decoder_ids = processor.get_decoder_prompt_ids(language='ko', task='transcribe')
+    forced_decoder_ids = processor.get_decoder_prompt_ids(language=LANG, task='transcribe')
     whisper.config.forced_decoder_ids = forced_decoder_ids
 
     # log-mel (Whisper-compatible)

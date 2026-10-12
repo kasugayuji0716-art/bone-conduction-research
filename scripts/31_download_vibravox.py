@@ -43,6 +43,10 @@ def main():
                         help='取得する split')
     parser.add_argument('--max_samples', type=int, default=None,
                         help='取得するサンプル数の上限（None=全件）')
+    parser.add_argument('--with_air',    action='store_true',
+                        help='気導マイク（ヘッドセットの参照マイク）も acoustic/ に保存する（適応の学習用の対データ）')
+    parser.add_argument('--out_split',   type=str, default=None,
+                        help='保存するときの split 名（validation を dev として保存するなど）')
     parser.add_argument('--streaming',   action='store_true',
                         help='ストリーミングモードで取得（ディスク節約）')
     args = parser.parse_args()
@@ -63,7 +67,11 @@ def main():
         trust_remote_code=True,
     )
 
-    out_wav_dir = OUT_DIR / 'throat' / args.split
+    out_split = args.out_split or args.split
+    out_wav_dir = OUT_DIR / 'throat' / out_split
+    air_dir = OUT_DIR / 'acoustic' / out_split
+    if args.with_air:
+        air_dir.mkdir(parents=True, exist_ok=True)
     out_wav_dir.mkdir(parents=True, exist_ok=True)
 
     rows = []
@@ -109,8 +117,26 @@ def main():
         if peak > 0:
             wav_array = wav_array / peak * 0.9
 
-        # 保存
         filename = f'{speaker_id}_{sentence_id}.wav'
+        if args.with_air:   # 気導マイク（ヘッドセットの参照マイク）。喉マイクと同じ処理（16 kHz、ピーク 0.9）
+            akeys = [k for k in sample.keys() if any(w in k.lower() for w in ('headset', 'reference', 'airborne'))]
+            if not akeys:
+                raise SystemExit(f'気導マイクのチャンネルが見つからない: {list(sample.keys())}')
+            ad = sample[akeys[0]]
+            air = np.array(ad['array'], dtype=np.float32)
+            if air.ndim > 1:
+                air = air.mean(axis=1)
+            if ad['sampling_rate'] != TARGET_SR:
+                from scipy.signal import resample_poly
+                air = resample_poly(air, TARGET_SR, ad['sampling_rate']).astype(np.float32)
+            pk = np.max(np.abs(air))
+            if pk > 0:
+                air = air / pk * 0.9
+            sf.write(str(air_dir / filename), air, TARGET_SR)
+            if count == 0:
+                print(f'  気導マイクのチャンネル: {akeys[0]}')
+
+        # 保存
         out_path = out_wav_dir / filename
         sf.write(str(out_path), wav_array, TARGET_SR)
 
@@ -125,7 +151,7 @@ def main():
             print(f'  [{count}] {speaker_id} {sentence_id}  "{text[:40]}"')
 
     # CSV 保存
-    out_csv = OUT_DIR / f'metadata_{args.split}.csv'
+    out_csv = OUT_DIR / f'metadata_{out_split}.csv'
     with open(out_csv, 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=['sentence_id', 'speaker_id', 'text'])
         w.writeheader()
