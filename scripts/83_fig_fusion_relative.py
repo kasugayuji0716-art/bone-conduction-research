@@ -27,21 +27,21 @@ CER = {
 }
 names = list(CER)
 rel = np.array([[100 * (v / c[0] - 1) for v in c[1:]] for c in CER.values()])
-labels = ['生成（1回）', '生成（4回平均）', '融合']
+labels = ['生成×1', '生成×4', '融合A']
 colors = ['#BBBBBB', '#2E75B6', '#1F4E79']
 
-fig, ax = plt.subplots(figsize=(3.3, 3.0), dpi=300)
+fig, ax = plt.subplots(figsize=(2.7, 2.6), dpi=300)
 y = np.arange(len(names))
-h = 0.26
+h = 0.27
 for k in range(3):
     ax.barh(y + (k - 1) * h, rel[:, k], h, color=colors[k], label=labels[k])
 ax.axhline(5.5, color='#888888', lw=0.6, ls='--')
-ax.set_yticks(y, names, fontsize=7)
+ax.set_yticks(y, names, fontsize=8)
 ax.invert_yaxis()
-ax.set_xlabel('TAPS SE 比の CER 変化 [%]', fontsize=7)
-ax.tick_params(axis='x', labelsize=7)
+ax.set_xlabel('TAPS SE 比の CER 変化 [%]', fontsize=8)
+ax.tick_params(axis='x', labelsize=8)
 ax.set_xlim(-40, 0)
-ax.legend(fontsize=6.5, loc='lower left', frameon=False)
+ax.legend(fontsize=7.5, loc='lower right', bbox_to_anchor=(1.02, 1.0), ncol=3, frameon=False, handlelength=1.0, columnspacing=0.8)
 for s in ('top', 'right'):
     ax.spines[s].set_visible(False)
 fig.tight_layout()
