@@ -13,7 +13,7 @@
 \usepackage{cite}
 
 \pagestyle{empty}
-\setlength{\textfloatsep}{6pt plus 2pt minus 2pt}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
 \setlength{\floatsep}{6pt plus 2pt minus 2pt}
 
 % 見出しを講演論文らしく小さめに
@@ -64,7 +64,7 @@ ASR損失で学習したSEは、損失に用いた認識器の入力特徴量に
 \section{方法}
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.95\columnwidth]{\figdir/method_overview.png}
+  \includegraphics[width=\columnwidth]{\figdir/method_overview.png}
   \caption{手法の全体像。喉マイク音声を生成モデルとWhisper用SEの両方に通し、出力の振幅を融合してWhisper系の認識器に入力する}
   \label{fig:overview}
 \end{figure}
@@ -164,7 +164,7 @@ ASR損失による改善は、損失に用いた認識器と入力特徴量の�
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.74\columnwidth]{\figdir/fusion_relative.png}
+  \includegraphics[width=0.9\columnwidth]{\figdir/fusion_relative.png}
   \caption{TAPS SE比のCER変化（棒が左に長いほど改善）。破線より上がWhisper系、下が入力特徴量の異なる認識器}
   \label{fig:rel}
 \end{figure}
@@ -323,7 +323,7 @@ CE-SEは特定の入力特徴量に合わせた変化を加え、その効果は
 実用上は、対数振幅×内挿の融合（融合B）がWhisper系の上乗せを保ちつつ他系統への害をほぼ避けられるため、最も扱いやすい。
 生成モデルを動かせない場合は、内挿した単体のSE（内挿$'$）が、計算量を抑えつつWhisper系を改善し他系統をほぼ悪化させない選択肢となる。
 
-VibraVoxでの結果は、TAPSで学習した部品が収録機種に強く特化していることを示す（TAPS SEはTAPSでは処理なしのCERを0.446から0.230へ下げるが、VibraVoxでは0.422から0.711へ悪化させる）。本稿の結論は機種ごとに適応した場合のものである。
+VibraVoxでの結果は、TAPSで学習した部品が収録機種に強く特化していることを示す（TAPS SEはTAPSでは処理なしのCERを0.446から0.230へ下げるが、VibraVoxでは0.422から0.711へ悪化させる）。本稿の結論は機種ごとに適応した場合のものであり、別機種への適用には同じ手順での適応が必要である。ただし、生成モデルが既存のSEより良く、融合でWhisper系にさらに上乗せされるという手法どうしの順位は、別機種でも保たれた。
 
 本研究の限界として、融合の計算量が大きい（4.3億パラメータのモデルを20段・4サンプル実行）こと、適応して評価した機種がTAPSのみであること、各モデルの学習が1回であること、Dissen型との比較が別の認識経路によることが挙げられる。
 今後はVibraVoxで同じ手順の適応を行って結論が再現するかを確かめるとともに、融合の出力を教師とした軽量なSEへの蒸留を検討する。
@@ -338,7 +338,7 @@ Whisper系向けの喉マイクSEについて、事前学習済み生成モデ�
 内挿したSEは単体でもWhisper系を改善し、XLS-Rを悪化させなかった。
 ただしTAPSで学習した部品は別機種の喉マイクには効かず、機種ごとの適応が必要である。
 
-\footnotesize
+\small
 \let\oldbibitem\bibitem
 \renewcommand{\bibitem}{\setlength{\itemsep}{0pt}\setlength{\parsep}{0pt}\oldbibitem}
 \bibliographystyle{IEEEtran}
