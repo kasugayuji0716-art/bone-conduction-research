@@ -115,22 +115,35 @@ const pct = v => (100 * v).toFixed(1);
 {
   const s = newSlide();
   title(s, "欠けた音の補完と Whisper への合わせ込みは、分けて設計できる");
-  T(s, "分かったこと", { x: M, y: 1.6, w: 6.0, h: 0.45, fontSize: 20, bold: true, color: C.primary });
-  T(s, [
-    { text: "1. ", options: { bold: true, color: C.primary } }, { text: "Whisper の損失で学習した音声強調は、作りの違う認識器では", options: {} }, { text: "逆に悪化", options: { bold: true, color: C.alert, breakLine: true } },
-    { text: "2. ", options: { bold: true, color: C.primary } }, { text: "事前学習済みの生成モデルは、", options: {} }, { text: "どの認識器にも効く", options: { bold: true, breakLine: true } },
-    { text: "3. ", options: { bold: true, color: C.primary } }, { text: "効くのは声の大まかな形。害は", options: {} }, { text: "元々無い高い音", options: { bold: true } }, { text: "から", options: {} },
-  ], { x: M, y: 2.15, w: 6.0, h: 3.6, fontSize: 17, paraSpaceAfter: 16, lineSpacingMultiple: 1.25 });
-  line(s, M + 6.35, 1.7, 0, 3.0);
-  const rx = M + 6.7, rw = W - 6.7;
-  T(s, "この研究の価値", { x: rx, y: 1.6, w: rw, h: 0.45, fontSize: 20, bold: true, color: C.primary });
-  T(s, bullets([
-    [{ b: "中身を変えられない Whisper 系" }, "でも、前処理だけで誤りを 26〜37% 減らせる"],
-    [{ b: "設計の指針" }, "：欠けた音は生成で補い、Whisper 向けの調整は外側で控えめに足す"],
-    ["機種が変わると効かない", { b: "限界" }, "も示した"],
-  ], { fontSize: 17 }), { x: rx, y: 2.15, w: rw, h: 3.6, paraSpaceAfter: 16, lineSpacingMultiple: 1.25 });
-  cite(s, "中身を変えられない認識器 = クラウドの音声認識など。限界は別機種の喉マイク（VibraVox、仏語）での確認による");
-  s.addNotes("【台本】（約40秒）\nこの研究で分かったことは3つです。1つ目、Whisper の損失で学習した音声強調は、作りの違う認識器では逆に悪くなります。2つ目、事前学習済みの生成モデルは、どの認識器でも効きます。3つ目、Whisper に効いているのは声の大まかな形で、悪影響は喉マイクに元々無い高い音から来ています。\n\n価値としては、クラウドのように中身を変えられない Whisper 系の認識器でも、前処理だけで誤りを 26〜37% 減らせることです。また、欠けた音は生成で補い、Whisper 向けの調整は外側で控えめに足す、という設計の指針になります。一方で、別の機種の喉マイクではそのままでは効かないという限界も分かりました。");
+  const lw = 6.6;
+  T(s, "分かったこと", { x: M, y: 1.55, w: lw, h: 0.4, fontSize: 19, bold: true, color: C.primary });
+  const finds = [
+    ["Whisper 用に学習すると、他の認識器では悪化", "作りの違う XLS-R・Zipformer では誤りが 26〜46% 増える"],
+    ["生成モデルは、どの認識器にも効く", "9つすべてで誤りが 15〜24% 減る。効果の源は事前学習"],
+    ["Whisper に効くのは「声の大まかな形」", "母音などを決める周波数の山の形（スペクトル包絡）。\n細かい倍音だけ混ぜても効かない"],
+    ["他の認識器への害は「元々無い高い音」から", "喉マイクに無い 4 kHz 以上を Whisper 向けに作った成分。\n4 kHz 未満だけ混ぜれば害は出ない"],
+  ];
+  let y = 2.05;
+  finds.forEach(([h, d], k) => {
+    const n = d.split("\n").length;
+    T(s, [{ text: `${k + 1}. `, options: { color: C.primary } }, { text: h, options: {} }], { x: M, y, w: lw, h: 0.4, fontSize: 17, bold: true });
+    T(s, d, { x: M + 0.3, y: y + 0.42, w: lw - 0.3, h: 0.3 * n, fontSize: 14, color: C.muted, lineSpacingMultiple: 1.15 });
+    y += 0.42 + 0.3 * n + 0.32;
+  });
+  line(s, M + 6.95, 1.65, 0, 4.7);
+  const rx = M + 7.3, rw = W - 7.3;
+  T(s, "この研究の価値", { x: rx, y: 1.55, w: rw, h: 0.4, fontSize: 19, bold: true, color: C.primary });
+  const vals = [
+    ["前処理だけで誤り 26〜37% 減", "クラウドの認識器など、中身を変えられない\nWhisper 系にも使える"],
+    ["設計の指針になる", "欠けた音は生成モデルで補い、\nWhisper 向けの調整は外側で控えめに足す"],
+  ];
+  vals.forEach(([h, d], k) => {
+    const y = 2.05 + k * 1.4;
+    T(s, h, { x: rx, y, w: rw, h: 0.4, fontSize: 17, bold: true });
+    T(s, d, { x: rx, y: y + 0.42, w: rw, h: 0.8, fontSize: 14, color: C.muted, lineSpacingMultiple: 1.15 });
+  });
+  cite(s, "限界：TAPS で学習した部品は、別機種の喉マイク（VibraVox、仏語）にはそのままでは効かない（機種ごとの適応が必要）");
+  s.addNotes("【台本】（約50秒）\nこの研究で分かったことは4つです。\n1つ目、Whisper の損失で学習した音声強調は、作りの違う認識器では逆に誤りが 26〜46% 増えます。\n2つ目、事前学習済みの生成モデルは、9つの認識器すべてで誤りを 15〜24% 減らします。効いているのは事前学習の知識です。\n3つ目、混ぜたときに Whisper に効いているのは、声の大まかな形、つまり母音などを決める周波数の山の形です。細かい倍音の部分だけ混ぜても効きませんでした。\n4つ目、他の認識器への悪影響は、喉マイクに元々無い 4 kHz 以上の音を、Whisper 向けに作ってしまった成分から来ています。4 kHz 未満だけを混ぜれば悪影響は出ません。\n\n価値としては、クラウドのように中身を変えられない Whisper 系の認識器でも、前処理だけで誤りを 26〜37% 減らせること、そして、欠けた音は生成で補い、Whisper 向けの調整は外側で控えめに足す、という設計の指針になることです。ただし、別の機種の喉マイクにはそのままでは効かないという限界もあります。");
 }
 
 pptx.writeFile({ fileName: __dirname + "/fusion_slides_2026-10.pptx" }).then(f => console.log("wrote", f));
