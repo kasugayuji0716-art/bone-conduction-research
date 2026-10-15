@@ -111,4 +111,26 @@ const pct = v => (100 * v).toFixed(1);
   s.addNotes("【台本】（約30秒）\nただし副作用もありました。Whisper と作りの違う Zipformer では、混ぜると逆に 12% 悪くなりました。そこで、Whisper 用の音声強調の重みを3割だけ元に戻し、混ぜ方も対数での平均に変えると、Whisper 系の効果はそのままで、Zipformer の悪化は 2% まで小さくなりました。");
 }
 
+// 4. 発見と価値
+{
+  const s = newSlide();
+  title(s, "欠けた音の補完と Whisper への合わせ込みは、分けて設計できる");
+  T(s, "分かったこと", { x: M, y: 1.6, w: 6.0, h: 0.45, fontSize: 20, bold: true, color: C.primary });
+  T(s, [
+    { text: "1. ", options: { bold: true, color: C.primary } }, { text: "Whisper の損失で学習した音声強調は、作りの違う認識器では", options: {} }, { text: "逆に悪化", options: { bold: true, color: C.alert, breakLine: true } },
+    { text: "2. ", options: { bold: true, color: C.primary } }, { text: "事前学習済みの生成モデルは、", options: {} }, { text: "どの認識器にも効く", options: { bold: true, breakLine: true } },
+    { text: "3. ", options: { bold: true, color: C.primary } }, { text: "効くのは声の大まかな形。害は", options: {} }, { text: "元々無い高い音", options: { bold: true } }, { text: "から", options: {} },
+  ], { x: M, y: 2.15, w: 6.0, h: 3.6, fontSize: 17, paraSpaceAfter: 16, lineSpacingMultiple: 1.25 });
+  line(s, M + 6.35, 1.7, 0, 3.0);
+  const rx = M + 6.7, rw = W - 6.7;
+  T(s, "この研究の価値", { x: rx, y: 1.6, w: rw, h: 0.45, fontSize: 20, bold: true, color: C.primary });
+  T(s, bullets([
+    [{ b: "中身を変えられない Whisper 系" }, "でも、前処理だけで誤りを 26〜37% 減らせる"],
+    [{ b: "設計の指針" }, "：欠けた音は生成で補い、Whisper 向けの調整は外側で控えめに足す"],
+    ["機種が変わると効かない", { b: "限界" }, "も示した"],
+  ], { fontSize: 17 }), { x: rx, y: 2.15, w: rw, h: 3.6, paraSpaceAfter: 16, lineSpacingMultiple: 1.25 });
+  cite(s, "中身を変えられない認識器 = クラウドの音声認識など。限界は別機種の喉マイク（VibraVox、仏語）での確認による");
+  s.addNotes("【台本】（約40秒）\nこの研究で分かったことは3つです。1つ目、Whisper の損失で学習した音声強調は、作りの違う認識器では逆に悪くなります。2つ目、事前学習済みの生成モデルは、どの認識器でも効きます。3つ目、Whisper に効いているのは声の大まかな形で、悪影響は喉マイクに元々無い高い音から来ています。\n\n価値としては、クラウドのように中身を変えられない Whisper 系の認識器でも、前処理だけで誤りを 26〜37% 減らせることです。また、欠けた音は生成で補い、Whisper 向けの調整は外側で控えめに足す、という設計の指針になります。一方で、別の機種の喉マイクではそのままでは効かないという限界も分かりました。");
+}
+
 pptx.writeFile({ fileName: __dirname + "/fusion_slides_2026-10.pptx" }).then(f => console.log("wrote", f));
