@@ -134,6 +134,10 @@ SETS['vbx_sensor'] = ['no_se', 'vbx_se0', 'vbx_ce10', 'fm_vbx_avg4', 'fm_vbx_avg
 VBX_FEW = ['fm_vbx_x1'] + [f'fm_vbx_n{n}_x1' for n in (200, 1000, 5000)]
 SETS['vbx_few'] = ['no_se'] + VBX_FEW
 ALL_CONDS += VBX_FEW
+# 査読指摘2の対照: 生成×4に CE 損失を使っていない SE を同じ方法（振幅半々・位相は生成）で混ぜる
+FUSE_CTRL = ['fm_avg4_mavg_taps', 'fm_avg4_mavg_ce0', 'fm_avg4_mavg_ssl']
+SETS['fuse_ctrl'] = ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + FUSE_CTRL
+ALL_CONDS += FUSE_CTRL
 ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
