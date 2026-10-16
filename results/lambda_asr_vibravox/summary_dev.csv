@@ -1,0 +1,13 @@
+asr,cond,n,cer_nopunct
+whisper-small,vbx_se0,2523,0.2057
+whisper-small,vbx_ce10,2523,0.1192
+whisper-small,vbxwise_a0.1,2523,0.1778
+whisper-small,vbxwise_a0.2,2523,0.1538
+whisper-small,vbxwise_a0.3,2523,0.1357
+whisper-small,vbxwise_a0.4,2523,0.1205
+whisper-small,vbxwise_a0.5,2523,0.1112
+whisper-small,vbxwise_a0.6,2523,0.1067
+whisper-small,vbxwise_a0.7,2523,0.1048
+whisper-small,vbxwise_a0.8,2523,0.1073
+whisper-small,vbxwise_a0.9,2523,0.1129
+whisper-small,no_se,2523,0.3144

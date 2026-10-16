@@ -1,0 +1,5 @@
+asr,A,B,cer_A,cer_B,rel,spk_B_better,n_spk,p_spk
+whisper-small,taps,ce10.0,0.7025,0.5847,-16.8,16,21,0.0012
+whisper-small,taps,wisectrl_a0.7,0.7025,0.6153,-12.4,15,21,0.0022
+whisper-small,taps,no_se,0.7025,0.4494,-36.0,21,21,0.0
+whisper-small,taps,wise_a0.7,0.7025,0.5965,-15.1,17,21,0.0005

@@ -1,0 +1,6 @@
+asr,cond,n,cer_nopunct
+whisper-small,taps,3064,0.7118
+whisper-small,ce10.0,3064,0.5923
+whisper-small,wisectrl_a0.7,3064,0.624
+whisper-small,no_se,3064,0.4541
+whisper-small,wise_a0.7,3064,0.6043
