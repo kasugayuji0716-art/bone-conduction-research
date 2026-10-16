@@ -69,13 +69,23 @@ def fetch_examples():
         txt.replace(f'init_from_pretrained_model: {PRETRAINED}', 'init_from_nemo_model: null'))
 
 
+def subset(args):
+    """少ない対データで適応できるかを見るため、train.json から N 対を乱数（種 0）で選ぶ"""
+    import random
+    lines = open(WORK / 'train.json').read().splitlines()
+    random.Random(0).shuffle(lines)
+    out = WORK / f'train_n{args.n_train}.json'
+    out.write_text('\n'.join(lines[:args.n_train]) + '\n')
+    print(f'{args.n_train} / {len(lines)} pairs → {out}')
+
+
 def train(args):
     fetch_examples()
     exp = BASE_DIR / 'checkpoints' / args.tag
     cmd = [sys.executable, str(EXAMPLES / 'audio_to_audio_train.py'),
            f'--config-path={EXAMPLES / "conf"}',
            '--config-name=' + ('flow_matching_scratch' if args.scratch else 'flow_matching_generative_finetuning'),
-           f'model.train_ds.manifest_filepath={WORK / "train.json"}',
+           f'model.train_ds.manifest_filepath={WORK / (args.train_json or "train.json")}',
            f'model.validation_ds.manifest_filepath={WORK / "dev100.json"}',
            '~model.log_config',
            f'model.train_ds.batch_size={args.batch_size}',
@@ -153,7 +163,7 @@ def infer(args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('stage', choices=['manifest', 'train', 'infer'])
+    ap.add_argument('stage', choices=['manifest', 'subset', 'train', 'infer'])
     ap.add_argument('--tag', default='fm_taps')
     ap.add_argument('--max_steps', type=int, default=20000)
     ap.add_argument('--warmup', type=int, default=1000)
@@ -168,9 +178,11 @@ def main():
     ap.add_argument('--n_avg', type=int, default=1, help='N個のサンプルを振幅平均')
     ap.add_argument('--weights', default='', help='script 77 などで追加学習した state_dict（.pt）')
     ap.add_argument('--resume', default='', help='続きから学習するチェックポイント（*-last.ckpt）')
+    ap.add_argument('--train_json', default='', help='train: 学習に使うマニフェスト（WORK 内の名前。既定 train.json）')
+    ap.add_argument('--n_train', type=int, default=0, help='subset: train.json から乱数で N 対を選んで train_n<N>.json を作る')
     ap.add_argument('--scratch', action='store_true', help='事前学習なし（初期値ランダム）で学習する対照')
     args = ap.parse_args()
-    {'manifest': lambda: manifest(), 'train': lambda: train(args), 'infer': lambda: infer(args)}[args.stage]()
+    {'manifest': lambda: manifest(), 'subset': lambda: subset(args), 'train': lambda: train(args), 'infer': lambda: infer(args)}[args.stage]()
 
 
 if __name__ == '__main__':

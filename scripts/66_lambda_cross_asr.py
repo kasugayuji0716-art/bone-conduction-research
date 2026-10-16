@@ -130,6 +130,10 @@ SETS['vbx_adapt'] = ['no_se', 'taps', 'vbx_se0', 'vbx_ce10', 'vbx_wise', 'fm_vbx
 ALL_CONDS += ['vbx_se0', 'vbx_ce10', 'vbx_wise', 'fm_vbx_avg4', 'fm_vbx_avg4_mavg_ce10', 'fm_vbx_avg4_lmavg_wise'] + VBX_WISE
 # 同じ VibraVox で別の体内伝導センサー（BCR_DATASET=vibravox_soft_in_ear / vibravox_forehead）に、喉マイクで適応した部品をそのまま使う
 SETS['vbx_sensor'] = ['no_se', 'vbx_se0', 'vbx_ce10', 'fm_vbx_avg4', 'fm_vbx_avg4_mavg_ce10']
+# 少ない対データでの適応（生成モデルを VibraVox train の N 対だけで追加学習、生成1回で比較）
+VBX_FEW = ['fm_vbx_x1'] + [f'fm_vbx_n{n}_x1' for n in (200, 1000, 5000)]
+SETS['vbx_few'] = ['no_se'] + VBX_FEW
+ALL_CONDS += VBX_FEW
 ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
