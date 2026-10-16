@@ -47,6 +47,8 @@ def main():
                         help='気導マイク（ヘッドセットの参照マイク）も acoustic/ に保存する（適応の学習用の対データ）')
     parser.add_argument('--out_split',   type=str, default=None,
                         help='保存するときの split 名（validation を dev として保存するなど）')
+    parser.add_argument('--channel',     type=str, default='throat',
+                        help='使う体内伝導センサー（キーの一部）: throat / soft_in_ear / rigid_in_ear / forehead / temple。throat 以外は data/raw/vibravox_<channel>/throat/ に保存（評価コードが throat/ を読むため）')
     parser.add_argument('--streaming',   action='store_true',
                         help='ストリーミングモードで取得（ディスク節約）')
     args = parser.parse_args()
@@ -67,6 +69,9 @@ def main():
         trust_remote_code=True,
     )
 
+    global OUT_DIR
+    if args.channel != 'throat':
+        OUT_DIR = OUT_DIR.parent / f'vibravox_{args.channel}'
     out_split = args.out_split or args.split
     out_wav_dir = OUT_DIR / 'throat' / out_split
     air_dir = OUT_DIR / 'acoustic' / out_split
@@ -90,15 +95,11 @@ def main():
         speaker_id  = sample.get('speaker_id',  f'spk{i:04d}')
         sentence_id = sample.get('sentence_id', f'utt{i:06d}')
 
-        # 音声取得（throat_microphone チャンネル）
-        audio_dict = sample.get('audio.throat_microphone',
-                     sample.get('throat_microphone', None))
-        if audio_dict is None:
-            # フラットなキー構造の場合
-            audio_keys = [k for k in sample.keys() if 'throat' in k.lower()]
-            if not audio_keys:
-                continue
-            audio_dict = sample[audio_keys[0]]
+        # 音声取得（--channel で選んだ体内伝導センサー。既定は throat_microphone）
+        audio_keys = [k for k in sample.keys() if k.startswith('audio.') and args.channel in k.lower()]
+        if not audio_keys:
+            continue
+        audio_dict = sample[audio_keys[0]]
 
         wav_array = np.array(audio_dict['array'], dtype=np.float32)
         sr        = audio_dict['sampling_rate']
