@@ -138,6 +138,10 @@ ALL_CONDS += VBX_FEW
 FUSE_CTRL = ['fm_avg4_mavg_taps', 'fm_avg4_mavg_ce0', 'fm_avg4_mavg_ssl']
 SETS['fuse_ctrl'] = ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + FUSE_CTRL
 ALL_CONDS += FUSE_CTRL
+# 査読「学習が1回」への対応: 生成モデルと CE-SE を学習し直した 2 回分（s2, s3）。融合は同じ回どうしで組む
+SEED_CONDS = ['ce_s2', 'ce_s3', 'fm_s2_avg4', 'fm_s3_avg4', 'fm_s2_avg4_mavg_ce_s2', 'fm_s3_avg4_mavg_ce_s3']
+SETS['seed'] = ['taps', 'ce10.0', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + SEED_CONDS
+ALL_CONDS += SEED_CONDS
 ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']

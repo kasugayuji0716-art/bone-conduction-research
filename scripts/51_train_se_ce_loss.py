@@ -192,6 +192,7 @@ def main():
                         help='学習時だけ Whisper の各層の出力に dropout（Ghost Networks, Li et al. AAAI 2020）')
     parser.add_argument('--layerdrop', type=float, default=0.0,
                         help='学習時だけ Whisper の各層を確率的に飛ばす（残差だけ通す）')
+    parser.add_argument('--seed', type=int, default=None, help='乱数の種（既定: 固定しない）')
     parser.add_argument('--resid_scale', type=float, default=0.0,
                         help='学習時だけ Whisper の各層が残差に足す分を U(1-g, 1+g) 倍（Ghost Networks の skip connection erosion）')
     parser.add_argument('--branch_dropout', type=float, default=0.0,
@@ -201,6 +202,9 @@ def main():
                         help='学習時だけ Whisper に入れる前の波形を変形（Input Diversity, Xie et al. CVPR 2019）: ±3 dB のゲイン、0〜10 ms の時間シフト')
     args = parser.parse_args()
 
+    if args.seed is not None:
+        import random
+        random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
     ckpt_dir = BASE_DIR / 'checkpoints' / args.tag
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 

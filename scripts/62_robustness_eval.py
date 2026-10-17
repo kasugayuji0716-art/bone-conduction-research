@@ -53,6 +53,7 @@ SE_CKPTS = {
 CTC_MODELS = {
     'mms-1b-all':    'facebook/mms-1b-all',
     'xlsr-korean':   'kresnik/wav2vec2-large-xlsr-korean',
+    'xlsr-french':   'jonatasgrosman/wav2vec2-large-xlsr-53-french',   # VibraVox（仏語）の対照用
 }
 PART_A_CONDS = ['no_se', 'taps', 'enc5', 'ce0', 'ce10']
 PART_B_CONDS = ['taps', 'ce10',
@@ -110,11 +111,17 @@ def load_se(path):
     return m.to(DEVICE).eval()
 
 
+try:
+    from dataset_cfg import DATASET as _DATASET
+except ImportError:
+    _DATASET = 'taps'
+
 def load_ctc(name, repo):
     from transformers import AutoProcessor, Wav2Vec2ForCTC
     if name.startswith('mms'):
-        proc = AutoProcessor.from_pretrained(repo, target_lang='kor')
-        model = Wav2Vec2ForCTC.from_pretrained(repo, target_lang='kor',
+        lang = 'kor' if _DATASET == 'taps' else 'fra'   # BCR_DATASET=vibravox* のときは仏語のアダプタ
+        proc = AutoProcessor.from_pretrained(repo, target_lang=lang)
+        model = Wav2Vec2ForCTC.from_pretrained(repo, target_lang=lang,
                                                ignore_mismatched_sizes=True)
     else:
         proc = AutoProcessor.from_pretrained(repo)
