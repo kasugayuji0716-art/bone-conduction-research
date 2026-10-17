@@ -123,8 +123,9 @@ def load_ctc(name, repo):
         proc = AutoProcessor.from_pretrained(repo, target_lang=lang)
         model = Wav2Vec2ForCTC.from_pretrained(repo, target_lang=lang,
                                                ignore_mismatched_sizes=True)
-    else:
-        proc = AutoProcessor.from_pretrained(repo)
+    else:   # 言語モデル付きの processor を持つモデル（xlsr-french）もあるので、言語モデルなしの貪欲復号にそろえる
+        from transformers import Wav2Vec2Processor
+        proc = Wav2Vec2Processor.from_pretrained(repo)
         model = Wav2Vec2ForCTC.from_pretrained(repo)
     return proc, model.to(DEVICE).eval()
 
