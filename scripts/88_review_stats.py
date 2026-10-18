@@ -42,7 +42,7 @@ if DS.DATASET == 'taps':
                ('fm_avg4_mavg_taps', 'fm_avg4_mavg_ce10'), ('fm_avg4_mavg_ce0', 'fm_avg4_mavg_ce10')]
     CER_CONDS = ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'wise_a0.7', 'fm_avg4_lmavg_wise']
 else:
-    ASRS = ['whisper-small', 'whisper-base', 'whisper-medium', 'whisper-large-v3-turbo', 'qwen3-asr-1.7b']
+    ASRS = ['whisper-small', 'whisper-base', 'whisper-medium', 'whisper-large-v3-turbo', 'qwen3-asr-1.7b', 'xlsr-french', 'mms-1b-all']
     COMPARE = [('no_se', 'taps'), ('no_se', 'fm_taps_avg4'), ('no_se', 'fm_avg4_lmavg_wise'),
                ('no_se', 'vbx_se0'), ('vbx_se0', 'vbx_ce10'), ('vbx_ce10', 'vbx_wise'), ('no_se', 'fm_vbx_avg4'),
                ('vbx_se0', 'fm_vbx_avg4'), ('fm_vbx_avg4', 'fm_vbx_avg4_mavg_ce10'),
