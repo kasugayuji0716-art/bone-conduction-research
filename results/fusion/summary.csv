@@ -11,6 +11,8 @@ whisper-base,m3_log,1000,0.2558
 whisper-base,m3_med,1000,0.2572
 whisper-base,m4_amp,1000,0.2554
 whisper-base,m4_med,1000,0.2549
+whisper-base,m3nd_amp,1000,0.2596
+whisper-base,m3nd_med,1000,0.2628
 whisper-small,taps,1000,0.2297
 whisper-small,p2_w25,1000,0.2176
 whisper-small,p2_w50,1000,0.2161
@@ -23,6 +25,8 @@ whisper-small,m3_log,1000,0.2057
 whisper-small,m3_med,1000,0.2106
 whisper-small,m4_amp,1000,0.2073
 whisper-small,m4_med,1000,0.2097
+whisper-small,m3nd_amp,1000,0.2128
+whisper-small,m3nd_med,1000,0.2159
 whisper-medium,taps,1000,0.1962
 whisper-medium,p2_w25,1000,0.1844
 whisper-medium,p2_w50,1000,0.1837
@@ -35,6 +39,8 @@ whisper-medium,m3_log,1000,0.1752
 whisper-medium,m3_med,1000,0.1801
 whisper-medium,m4_amp,1000,0.177
 whisper-medium,m4_med,1000,0.1773
+whisper-medium,m3nd_amp,1000,0.1826
+whisper-medium,m3nd_med,1000,0.1838
 whisper-ft,taps,1000,0.1462
 whisper-ft,p2_w25,1000,0.1354
 whisper-ft,p2_w50,1000,0.1338
@@ -47,6 +53,8 @@ whisper-ft,m3_log,1000,0.1248
 whisper-ft,m3_med,1000,0.128
 whisper-ft,m4_amp,1000,0.1253
 whisper-ft,m4_med,1000,0.1266
+whisper-ft,m3nd_amp,1000,0.1285
+whisper-ft,m3nd_med,1000,0.133
 mms-1b-all,taps,1000,0.3498
 mms-1b-all,p2_w25,1000,0.3416
 mms-1b-all,p2_w50,1000,0.3406
@@ -59,6 +67,8 @@ mms-1b-all,m3_log,1000,0.335
 mms-1b-all,m3_med,1000,0.3384
 mms-1b-all,m4_amp,1000,0.3353
 mms-1b-all,m4_med,1000,0.3373
+mms-1b-all,m3nd_amp,1000,0.3397
+mms-1b-all,m3nd_med,1000,0.3408
 xlsr-korean,taps,1000,0.2216
 xlsr-korean,p2_w25,1000,0.2161
 xlsr-korean,p2_w50,1000,0.2164
@@ -71,3 +81,20 @@ xlsr-korean,m3_log,1000,0.2183
 xlsr-korean,m3_med,1000,0.2184
 xlsr-korean,m4_amp,1000,0.2152
 xlsr-korean,m4_med,1000,0.2152
+xlsr-korean,m3nd_amp,1000,0.2181
+xlsr-korean,m3nd_med,1000,0.2179
+whisper-large-v3-turbo,taps,1000,0.1697
+whisper-large-v3-turbo,m4_amp,1000,0.152
+whisper-large-v3-turbo,m4_med,1000,0.1513
+whisper-large-v3-turbo,m3nd_amp,1000,0.1547
+whisper-large-v3-turbo,m3nd_med,1000,0.1574
+qwen3-asr-1.7b,taps,1000,0.1359
+qwen3-asr-1.7b,m4_amp,1000,0.1256
+qwen3-asr-1.7b,m4_med,1000,0.1241
+qwen3-asr-1.7b,m3nd_amp,1000,0.1259
+qwen3-asr-1.7b,m3nd_med,1000,0.1267
+zipformer-ko,taps,1000,0.5422
+zipformer-ko,m4_amp,1000,0.5261
+zipformer-ko,m4_med,1000,0.5626
+zipformer-ko,m3nd_amp,1000,0.5499
+zipformer-ko,m3nd_med,1000,0.5503
