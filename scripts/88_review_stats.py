@@ -1,8 +1,8 @@
 """
 スクリプト88: 査読（results/reviews/asj_manuscript_review_2026-10-17.md）への対応のための集計
 
-  指摘5・6: 主な比較の効果量（発話平均 CER の相対変化）と、話者単位の Wilcoxon 符号順位検定（両側、丸めない p 値、
-           比較ごとに認識器をまたいだ Holm 補正）。改善した話者数も出す
+  指摘5・6: 主な比較の効果量（発話平均 CER の相対変化）と、話者単位の Wilcoxon 符号順位検定（両側。p_wilcoxon は未補正、
+           p_holm は条件対ごとに認識器をまたいだ Holm 補正。補正は丸める前の p で計算し、出力時に有効数字3桁に丸める）。改善した話者数も出す
   指摘12 : 論文の CER（発話ごとに 1.0 で打ち切った平均）に加えて、通常の CER（総編集距離 / 総文字数）と、
            空白を除いた通常の CER を出す。どちらも句読点除去（VibraVox は小文字化も）後
 
@@ -40,10 +40,13 @@ if DS.DATASET == 'taps':
                ('fm_taps_avg4', 'fm_ceps_geo'), ('fm_taps_avg4', 'fm_ceps_env'), ('fm_taps_avg4', 'fm_ceps_fine'),
                ('fm_taps_avg4', 'fm_avg4_mavg_taps'), ('fm_taps_avg4', 'fm_avg4_mavg_ce0'), ('fm_taps_avg4', 'fm_avg4_mavg_ssl'),
                ('fm_avg4_mavg_taps', 'fm_avg4_mavg_ce10'), ('fm_avg4_mavg_ce0', 'fm_avg4_mavg_ce10'),
+               ('fm_avg4_mavg_ssl', 'fm_avg4_mavg_ce10'),   # 再査読1: CE 融合と SSL-MSE 融合の直接比較
                # 学習し直した 2 回分（s2, s3）
                ('fm_s2_avg4', 'fm_s2_avg4_mavg_ce_s2'), ('fm_s3_avg4', 'fm_s3_avg4_mavg_ce_s3'),
                ('taps', 'ce_s2'), ('taps', 'ce_s3'), ('taps', 'fm_s2_avg4'), ('taps', 'fm_s3_avg4')]
-    CER_CONDS = ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'wise_a0.7', 'fm_avg4_lmavg_wise']
+    CER_CONDS = ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'wise_a0.7', 'fm_avg4_lmavg_wise',
+                 'fm_avg4_mavg_taps', 'fm_avg4_mavg_ce0', 'fm_avg4_mavg_ssl',
+                 'ce_s2', 'ce_s3', 'fm_s2_avg4', 'fm_s3_avg4', 'fm_s2_avg4_mavg_ce_s2', 'fm_s3_avg4_mavg_ce_s3']
 else:
     ASRS = ['whisper-small', 'whisper-base', 'whisper-medium', 'whisper-large-v3-turbo', 'qwen3-asr-1.7b', 'xlsr-french', 'mms-1b-all']
     COMPARE = [('no_se', 'taps'), ('no_se', 'fm_taps_avg4'), ('no_se', 'fm_avg4_lmavg_wise'),
@@ -99,9 +102,10 @@ def main():
             ua, ub = np.mean(list(ca.values())), np.mean(list(cb.values()))
             block.append(dict(dataset=DS.DATASET, A=A, B=B, asr=a, cer_A=round(ua, 4), cer_B=round(ub, 4),
                               rel_pct=round(100 * (ub / ua - 1), 2), spk_B_better=int((mb < ma).sum()), n_spk=len(ks),
-                              p_wilcoxon=float(f'{p:.3g}')))
+                              p_wilcoxon=p))
+        # 補正は丸める前の p で行い、出力のときだけ有効数字3桁に丸める（再査読4）
         for r, adj in zip(block, holm([r['p_wilcoxon'] for r in block])):
-            r['p_holm'] = float(f'{adj:.3g}')
+            r['p_wilcoxon'], r['p_holm'] = float(f"{r['p_wilcoxon']:.3g}"), float(f'{adj:.3g}')
         rows += block
     with open(OUT / f'stats_{DS.DATASET}.csv', 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
