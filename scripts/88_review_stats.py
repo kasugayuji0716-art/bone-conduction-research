@@ -43,7 +43,12 @@ if DS.DATASET == 'taps':
                ('fm_avg4_mavg_ssl', 'fm_avg4_mavg_ce10'),   # 再査読1: CE 融合と SSL-MSE 融合の直接比較
                # 学習し直した 2 回分（s2, s3）
                ('fm_s2_avg4', 'fm_s2_avg4_mavg_ce_s2'), ('fm_s3_avg4', 'fm_s3_avg4_mavg_ce_s3'),
-               ('taps', 'ce_s2'), ('taps', 'ce_s3'), ('taps', 'fm_s2_avg4'), ('taps', 'fm_s3_avg4')]
+               ('taps', 'ce_s2'), ('taps', 'ce_s3'), ('taps', 'fm_s2_avg4'), ('taps', 'fm_s3_avg4'),
+               # 再学習の融合B（再査読2）と、融合A の蒸留（script 89）
+               ('fm_s2_avg4', 'fm_s2_avg4_lmavg_wise_s2'), ('fm_s3_avg4', 'fm_s3_avg4_lmavg_wise_s3'),
+               ('fm_s2_avg4_mavg_ce_s2', 'fm_s2_avg4_lmavg_wise_s2'), ('fm_s3_avg4_mavg_ce_s3', 'fm_s3_avg4_lmavg_wise_s3'),
+               ('ce10.0', 'dfuse_l0'), ('ce10.0', 'dfuse_l1'), ('wise_a0.7', 'dfuse_l1'), ('fm_avg4_mavg_ce10', 'dfuse_l0'),
+               ('fm_avg4_mavg_ce10', 'dfuse_l1'), ('taps', 'dfuse_l1')]
     CER_CONDS = ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'wise_a0.7', 'fm_avg4_lmavg_wise',
                  'fm_avg4_mavg_taps', 'fm_avg4_mavg_ce0', 'fm_avg4_mavg_ssl',
                  'ce_s2', 'ce_s3', 'fm_s2_avg4', 'fm_s3_avg4', 'fm_s2_avg4_mavg_ce_s2', 'fm_s3_avg4_mavg_ce_s3']
