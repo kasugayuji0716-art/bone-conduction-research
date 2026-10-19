@@ -39,7 +39,10 @@ if DS.DATASET == 'taps':
                ('fm_taps_avg4', 'fm_fuse_lo'), ('fm_taps_avg4', 'fm_fuse_hi'), ('fm_taps_avg4', 'fm_fuse_notch'),
                ('fm_taps_avg4', 'fm_ceps_geo'), ('fm_taps_avg4', 'fm_ceps_env'), ('fm_taps_avg4', 'fm_ceps_fine'),
                ('fm_taps_avg4', 'fm_avg4_mavg_taps'), ('fm_taps_avg4', 'fm_avg4_mavg_ce0'), ('fm_taps_avg4', 'fm_avg4_mavg_ssl'),
-               ('fm_avg4_mavg_taps', 'fm_avg4_mavg_ce10'), ('fm_avg4_mavg_ce0', 'fm_avg4_mavg_ce10')]
+               ('fm_avg4_mavg_taps', 'fm_avg4_mavg_ce10'), ('fm_avg4_mavg_ce0', 'fm_avg4_mavg_ce10'),
+               # 学習し直した 2 回分（s2, s3）
+               ('fm_s2_avg4', 'fm_s2_avg4_mavg_ce_s2'), ('fm_s3_avg4', 'fm_s3_avg4_mavg_ce_s3'),
+               ('taps', 'ce_s2'), ('taps', 'ce_s3'), ('taps', 'fm_s2_avg4'), ('taps', 'fm_s3_avg4')]
     CER_CONDS = ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'wise_a0.7', 'fm_avg4_lmavg_wise']
 else:
     ASRS = ['whisper-small', 'whisper-base', 'whisper-medium', 'whisper-large-v3-turbo', 'qwen3-asr-1.7b', 'xlsr-french', 'mms-1b-all']
