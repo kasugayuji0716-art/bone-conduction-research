@@ -142,6 +142,10 @@ ALL_CONDS += FUSE_CTRL
 SEED_CONDS = ['ce_s2', 'ce_s3', 'fm_s2_avg4', 'fm_s3_avg4', 'fm_s2_avg4_mavg_ce_s2', 'fm_s3_avg4_mavg_ce_s3']
 SETS['seed'] = ['taps', 'ce10.0', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + SEED_CONDS
 ALL_CONDS += SEED_CONDS
+# script 89: 融合A の出力（dev）を SE-Conformer 1つに蒸留。λ=0 は純粋な蒸留、λ=1 は Whisper-small の CE も足す（λ=10 だと CE が蒸留の約17倍で蒸留が効かない）
+DISTILL_FUSE = ['dfuse_l0', 'dfuse_l1']
+SETS['distill_fuse'] = ['taps', 'ce10.0', 'wise_a0.7', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + DISTILL_FUSE
+ALL_CONDS += DISTILL_FUSE
 ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
