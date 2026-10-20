@@ -10,6 +10,7 @@ CER による分解（帯域・ケプストラム、論文 4.3 節）は「ど�
           - 区間の種類（気導音から決める）: 無音（最大から 40 dB 以上低い）／有声（自己相関の周期性 > 0.5）／無声
           - 区間ごと・帯域ごとの平均対数メルと、気導音との L1 距離
           - LPC（8 kHz に下げて 10 次）で有声区間の F1〜F3 と帯域幅。気導音とのずれ
+          - 気導音の有声区間の基本周波数の中央値（f0_air、話者の声の高さ。山中ら 2026 は女性話者で劣化が大きいと報告）
           - スペクトルの傾き（有声区間、4 kHz 未満の対数メルの回帰直線の傾き）、無音区間の床、正のスペクトルフラックス（立ち上がり）、
             変調スペクトル（4 kHz 未満の帯域包絡の 4〜16 Hz 成分の割合）
   report  条件ごとの平均（話者単位の Wilcoxon で融合A 対 生成×4）と、発話ごとの特徴の変化と CER の変化の Spearman 相関
@@ -79,7 +80,8 @@ def frame_classes(air, T):
     ac = ac / (wac / wac[0] + 1e-12)[None]   # 窓の自己相関で割る（Boersma 1993、Praat と同じ）
     per = ac[:, 40:201].max(1)        # 遅れ 2.5〜12.5 ms（80〜400 Hz）の自己相関の最大
     cls = np.where(e < e.max() - 40, 2, np.where(per > 0.5, 0, 1))
-    return cls
+    f0 = SR / (40 + ac[:, 40:201].argmax(1))   # 有声フレームの基本周波数の目安（Hz）
+    return cls, f0
 
 
 def lpc_formants(x, voiced_frames, order=10):
@@ -147,7 +149,7 @@ def feats(args):
         sig = {c: v[:n].astype(np.float32) for c, v in sig.items()}
         Ma = whisper_logmel(air)
         T = Ma.shape[1]
-        cls = frame_classes(air, T)
+        cls, f0 = frame_classes(air, T)
         vf = np.where(cls == 0)[0]
         Fa = lpc_formants(air, vf)
         for k in range(3):
@@ -179,7 +181,8 @@ def feats(args):
                          **{f'bw{j + 1}': np.nanmedian(Fa[:, 3 + j]) if np.isfinite(Fa[:, 3 + j]).any() else np.nan for j in range(3)},
                          tilt=np.polyfit(MEL_HZ[LO] / 1000, Ma[:, cls == 0][LO].mean(1), 1)[0] if (cls == 0).any() else np.nan,
                          sil_floor=Ma[:, cls == 2].mean() if (cls == 2).any() else np.nan,
-                         flux=np.clip(np.diff(Ma, axis=1), 0, None).sum(0).mean(), mod4_16=mod_ratio(Ma)))
+                         flux=np.clip(np.diff(Ma, axis=1), 0, None).sum(0).mean(), mod4_16=mod_ratio(Ma),
+                         f0_air=np.median(f0[cls == 0]) if (cls == 0).any() else np.nan))
         if (i + 1) % 100 == 0:
             print(f'{i + 1}/{len(samples)}', flush=True)
     keys = sorted({k for r in rows for k in r}, key=lambda k: (k not in ('utt', 'spk', 'cond'), k))
@@ -239,6 +242,21 @@ def report(args):
             cells.append(f'{rho:+.3f}' + ('*' if p < 0.01 else ''))
         L.append(f'| {k} | ' + ' | '.join(cells) + ' |')
     L.append('\n*: p<0.01（発話単位なので話者内の相関は考慮していない。目安として見る）')
+    # 話者ごとの声の高さ（気導音の F0 中央値）と、融合A の生成×4 に対する CER の変化
+    L += ['', '## 話者の声の高さと融合の効果（10 話者、Spearman）', '', '| 認識器 | ρ（F0 と 融合A−生成×4 の CER 差） | p |', '|---|---|---|']
+    f0 = defaultdict(list)
+    for u, (s_, a_) in by['air'].items():
+        f0[s_].append(a_.get('f0_air', np.nan))
+    f0 = {k: np.nanmedian(v) for k, v in f0.items()}
+    for a in asrs:
+        d = defaultdict(list)
+        for u in cers[a][A]:
+            if u in cers[a][G] and u in by[A]:
+                d[by[A][u][0]].append(cers[a][A][u] - cers[a][G][u])
+        ks = sorted(set(d) & set(f0))
+        rho, p = spearmanr([f0[k] for k in ks], [np.mean(d[k]) for k in ks])
+        L.append(f'| {a} | {rho:+.2f} | {p:.3g} |')
+    L.append('話者ごとの F0: ' + ', '.join(f'{k} {v:.0f} Hz' for k, v in sorted(f0.items())))
     (OUT / 'report.md').write_text('\n'.join(L) + '\n', encoding='utf-8')
     print('\n'.join(L))
 
