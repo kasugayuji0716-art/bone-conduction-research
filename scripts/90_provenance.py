@@ -2,7 +2,7 @@
 スクリプト90: 再査読（results/reviews/asj_manuscript_rereview_2026-10-19.md）指摘6・14・15 のための確認記録
 
   - 論文で使った重み（SE-Conformer と生成モデル）のパス・大きさ・更新時刻・SHA-256（先頭16桁）
-  - 生成モデルの各学習ログの最終行（最終ステップまで学習したか）
+  - 生成モデルの最終 ckpt とその global_step（最終ステップまで学習したか）
   - TAPS / VibraVox の test・dev の発話数と最長の音声長（15秒超の扱いの確認）
   - 論文の主な条件の評価件数（summary.csv の n）
 
@@ -65,18 +65,30 @@ def main():
         L.append(f'| {k} | `{rel(p)}` | ' + ' | '.join(info(p)) + ' |')
     L += ['', '## 生成モデル（NeMo）の重み', '',
           '評価には各 tag の下で最も新しい .nemo（script 75 `find_nemo`）を用いる。TRAIN_DONE は学習コマンドが正常終了した印。', '',
-          '| 名前 | .nemo | 大きさ | 更新時刻 | SHA-256 | TRAIN_DONE | 最終 ckpt |', '|---|---|---|---|---|---|---|']
+          '| 名前 | .nemo | 大きさ | 更新時刻 | SHA-256 | TRAIN_DONE | 最終 ckpt | その global_step |', '|---|---|---|---|---|---|---|---|']
     for k, tag in GEN.items():
         ns = sorted((CK / tag).rglob('*.nemo'), key=lambda p: p.stat().st_mtime)
         last = sorted((CK / tag).rglob('*-last.ckpt'), key=lambda p: p.stat().st_mtime)
         n = ns[-1] if ns else CK / tag / '(none)'
+        step = '—'
+        if last:   # Lightning の ckpt に保存された学習ステップ数（20k step まで学習したかの確認）
+            import torch
+            step = torch.load(last[-1], map_location='cpu', weights_only=False, mmap=True).get('global_step', '—')
         L.append(f'| {k} | `{rel(n)}` | ' + ' | '.join(info(n)) +
-                 f" | {'あり' if (CK / tag / 'TRAIN_DONE').exists() else 'なし'} | {last[-1].name if last else '—'} |")
+                 f" | {'あり' if (CK / tag / 'TRAIN_DONE').exists() else 'なし'} | {last[-1].name if last else '—'} | {step} |")
     L += ['', '## 音声の件数と長さ（喉マイク）', '', '| データ | split | 発話数 | 最長（秒） | 15秒超 |', '|---|---|---|---|---|']
     for name, root in [('TAPS', BASE_DIR / 'data/raw/taps/throat'), ('VibraVox', BASE_DIR / 'data/raw/vibravox/throat')]:
         for sp in ['dev', 'test']:
             n, mx, over = durations(root / sp)
             L.append(f'| {name} | {sp} | {n} | {mx:.1f} | {over} |')
+    # 少量適応で実際に使った manifest の話者数（ファイル名は <speaker_id>_<sentence_id>.wav。話者 ID 自体に _ を含むので右から1回だけ切る）
+    import json
+    L += ['', '## 少量適応の対データ（VibraVox train の manifest）', '', '| manifest | 対 | 話者数 |', '|---|---|---|']
+    for f in ['train.json', 'train_n200.json', 'train_n1000.json', 'train_n5000.json']:
+        mp = BASE_DIR / 'data/processed/nemo75_vibravox' / f
+        if mp.exists():
+            names = [Path(json.loads(x)['noisy_filepath']).stem for x in mp.read_text().splitlines() if x.strip()]
+            L.append(f'| {f} | {len(names)} | {len({n.rsplit("_", 1)[0] for n in names})} |')
     L += ['', '## 主な条件の評価件数（summary.csv の n）', '']
     for name, (path, conds) in SUMMARIES.items():
         rows = list(csv.DictReader(open(BASE_DIR / path, encoding='utf-8')))
