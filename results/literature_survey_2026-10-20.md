@@ -18,6 +18,10 @@
 
 → **今の原稿（自作書式で6ページ）は4ページに縮め、学会のスタイルファイルに載せ替える必要がある**。申込時に4ページを選ぶこと。何を残すかは別途検討（主張を絞る好機）。
 
+### 参考: Interspeech 2027（国際会議の候補）
+
+出典: https://interspeech2027.org/（2026-10-20 確認）。論文締切 **2027年2月9日**（更新 2月16日）、採否 6月2日、会期 8月29日〜9月2日、サンパウロ。ASJ の原稿締切（1月21日）の約3週間後
+
 ## 2. 融合A の新規性に直接関わる先行研究
 
 - **Shi ら（Sony・京大）, ICASSP 2024**「Diffusion-Based SE with Joint Generative and Predictive Decoders」（arXiv:2305.10734）
@@ -55,3 +59,13 @@
 
 - Sensing Bone-Conducted Speech with Earbuds（arXiv:2609.02165）、DBMIF（気導＋骨導の融合 SE、arXiv:2603.02877）: 気導と骨導の両方を使う設定。本研究（喉マイク単体）とは問題設定が違う
 - Towards decoupling frontend enhancement and backend recognition（Computer Speech & Language 2025）: 前処理と認識器を切り離し、見ていない前処理・データへの汎化を示す。修士の「ASR に依存しない SE」の関連
+
+## 8. 国内の喉マイク研究（2026年秋季 ASJ、研究リポジトリ直下の PDF を通読）
+
+- **山中ら（東大）1-Q-42**: zero-shot の声質変換（Kanade・MioCodec）と帯域拡張（Sidon・EBEN）で喉マイク音声を気導音に戻す。TAPS と自作の日本語 NANZU で評価
+  - MCD・MOS は VC が良いが、**CER は処理なしが一貫して最良**（TAPS 0.233、Sidon 0.308、Kanade 0.927）。CER の基準は気導音の Whisper 出力（正解テキストではない）
+  - TAPS で追加学習したモデルは別デバイス（NANZU）で優劣が逆転
+  - TAPS の喉マイクは 1 kHz 以下が気導より 10〜25 dB 大きい。女性話者で劣化が大きい（フォルマントが高い）
+  - → 本研究の「対象デバイスで適応すれば CER が大きく下がる」「VibraVox ではそのままの転移は失敗」と整合。**女性話者の観察を受けて script 91 に話者の F0 と融合の効果の関係を追加**
+- **和田ら（神戸大・三菱電機）1-Q-56**: 喉マイクの感情認識。Sidon による雑音除去で認識率が下がる。摩擦音・破裂音に感情が乗る frustrated が喉マイクの弱点（4 kHz 以上の欠如）
+- **Sidon（Nakata ら, ICASSP 2026、arXiv:2509.17052）**: w2v-BERT 2.0＋ボコーダの多言語音声復元、オープンソース、実時間の500倍速。**学習なしの汎用復元の比較手法として TAPS test・9 認識器で測る価値がある**（「汎用復元 vs 対象デバイスで適応した生成モデル」）
