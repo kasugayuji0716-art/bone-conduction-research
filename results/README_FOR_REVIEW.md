@@ -16,6 +16,7 @@
 
 ## 認識結果の集計（CSV）
 - `results/lambda_asr/summary.csv`、`pairs.csv`：TAPS test（`summary_dev.csv` は dev）。列 asr / cond / n / cer_nopunct。pairs は TAPS SE 比と話者単位の検定
+- `results/eq_control/`：TAPS test の処理なし（`no_se`、論文 表1「なし」）と、ASR 損失なしの SE 同士の融合の対照（script 68）
 - `results/lambda_asr_vibravox/`：VibraVox test（喉マイク、仏語）
 - `results/lambda_asr_vibravox_lvl/`：VibraVox を TAPS の音量・帯域にそろえた入力
 - `results/lambda_asr_vibravox_soft_in_ear/`、`results/lambda_asr_vibravox_forehead/`：VibraVox の別センサー（柔らかい耳栓型マイク、額の加速度センサー）
