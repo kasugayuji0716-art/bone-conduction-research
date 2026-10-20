@@ -150,6 +150,10 @@ ALL_CONDS += DISTILL_FUSE
 SEED_FB = ['wise_s2_a0.7', 'wise_s3_a0.7', 'fm_s2_avg4_lmavg_wise_s2', 'fm_s3_avg4_lmavg_wise_s3']
 SETS['seed_fb'] = ['taps', 'fm_s2_avg4', 'fm_s3_avg4', 'fm_s2_avg4_mavg_ce_s2', 'fm_s3_avg4_mavg_ce_s3'] + SEED_FB
 ALL_CONDS += SEED_FB
+# script 91: イコライザの対照。生成×4 に融合A との差を、固定ゲイン（dev）→ 区間の種類ごと → 発話ごと（オラクル）と細かく移す
+EQ_A = ['fm_avg4_eqA_dev', 'fm_avg4_eqA_cls', 'fm_avg4_eqA_utt']
+SETS['eq_fuse'] = ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_ceps_env'] + EQ_A
+ALL_CONDS += EQ_A
 ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']

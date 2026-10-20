@@ -48,7 +48,10 @@ if DS.DATASET == 'taps':
                ('fm_s2_avg4', 'fm_s2_avg4_lmavg_wise_s2'), ('fm_s3_avg4', 'fm_s3_avg4_lmavg_wise_s3'),
                ('fm_s2_avg4_mavg_ce_s2', 'fm_s2_avg4_lmavg_wise_s2'), ('fm_s3_avg4_mavg_ce_s3', 'fm_s3_avg4_lmavg_wise_s3'),
                ('ce10.0', 'dfuse_l0'), ('ce10.0', 'dfuse_l1'), ('wise_a0.7', 'dfuse_l1'), ('fm_avg4_mavg_ce10', 'dfuse_l0'),
-               ('fm_avg4_mavg_ce10', 'dfuse_l1'), ('taps', 'dfuse_l1')]
+               ('fm_avg4_mavg_ce10', 'dfuse_l1'), ('taps', 'dfuse_l1'),
+               # イコライザの対照（script 91）: 生成×4 からどこまで融合A の効果が戻るか
+               ('fm_taps_avg4', 'fm_avg4_eqA_dev'), ('fm_taps_avg4', 'fm_avg4_eqA_cls'), ('fm_taps_avg4', 'fm_avg4_eqA_utt'),
+               ('fm_avg4_eqA_utt', 'fm_avg4_mavg_ce10')]
     CER_CONDS = ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'wise_a0.7', 'fm_avg4_lmavg_wise',
                  'fm_avg4_mavg_taps', 'fm_avg4_mavg_ce0', 'fm_avg4_mavg_ssl',
                  'ce_s2', 'ce_s3', 'fm_s2_avg4', 'fm_s3_avg4', 'fm_s2_avg4_mavg_ce_s2', 'fm_s3_avg4_mavg_ce_s3']
