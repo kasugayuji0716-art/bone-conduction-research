@@ -24,7 +24,7 @@ CER による分解（帯域・ケプストラム、論文 4.3 節）は「ど�
 使い方（GPU PC、feats / eq は CPU で可、SE 出力が保存されていない条件は SE を GPU で動かす）
     python scripts/91_acoustic_analysis.py feats
     python scripts/91_acoustic_analysis.py report
-    python scripts/91_acoustic_analysis.py fig
+    python scripts/91_acoustic_analysis.py fig      # Mac で（results/acoustic/bands.npz を持ってきて）
     python scripts/91_acoustic_analysis.py eq
 """
 
@@ -75,6 +75,8 @@ def frame_classes(air, T):
     spec = np.fft.rfft(fr, 1024)
     ac = np.fft.irfft(np.abs(spec) ** 2, 1024)
     ac = ac / (ac[:, :1] + 1e-12)
+    wac = np.fft.irfft(np.abs(np.fft.rfft(np.hanning(400), 1024)) ** 2, 1024)
+    ac = ac / (wac / wac[0] + 1e-12)[None]   # 窓の自己相関で割る（Boersma 1993、Praat と同じ）
     per = ac[:, 40:201].max(1)        # 遅れ 2.5〜12.5 ms（80〜400 Hz）の自己相関の最大
     cls = np.where(e < e.max() - 40, 2, np.where(per > 0.5, 0, 1))
     return cls
@@ -106,6 +108,14 @@ def lpc_formants(x, voiced_frames, order=10):
         out[k, :len(f)] = f
         out[k, 3:3 + len(bw)] = bw
     return out
+
+
+def mod_ratio(M):
+    """4 kHz 未満の帯域ごとのパワー包絡の変調スペクトルで、4〜16 Hz（音節の速さ）の成分が 50 Hz までに占める割合"""
+    env = 10 ** (4 * M[LO] - 4)
+    P = np.abs(np.fft.rfft(env - env.mean(1, keepdims=True), axis=1)) ** 2
+    fq = np.fft.rfftfreq(env.shape[1], 0.01)
+    return P[:, (fq >= 4) & (fq <= 16)].sum() / (P[:, (fq > 0) & (fq <= 50)].sum() + 1e-12)
 
 
 def load_cond(c, s, se_cache):
@@ -162,17 +172,14 @@ def feats(args):
             r['tilt'] = np.polyfit(MEL_HZ[LO] / 1000, V.mean(1), 1)[0] if V.size else np.nan   # 対数メル単位 / kHz
             r['sil_floor'] = M[:, cls == 2].mean() if (cls == 2).any() else np.nan
             r['flux'] = np.clip(np.diff(M, axis=1), 0, None).sum(0).mean()
-            env = (10 ** (4 * M[LO] - 4))                       # 4 kHz 未満の帯域ごとのパワー包絡
-            P = np.abs(np.fft.rfft(env - env.mean(1, keepdims=True), axis=1)) ** 2
-            fq = np.fft.rfftfreq(env.shape[1], 0.01)
-            r['mod4_16'] = P[:, (fq >= 4) & (fq <= 16)].sum() / (P[:, (fq > 0) & (fq <= 50)].sum() + 1e-12)
+            r['mod4_16'] = mod_ratio(M)
             rows.append(r)
         # 気導音そのものの値も（参照）
         rows.append(dict(utt=s['utt'], spk=s['spk'], cond='air', l1_all=0.0,
                          **{f'bw{j + 1}': np.nanmedian(Fa[:, 3 + j]) if np.isfinite(Fa[:, 3 + j]).any() else np.nan for j in range(3)},
                          tilt=np.polyfit(MEL_HZ[LO] / 1000, Ma[:, cls == 0][LO].mean(1), 1)[0] if (cls == 0).any() else np.nan,
                          sil_floor=Ma[:, cls == 2].mean() if (cls == 2).any() else np.nan,
-                         flux=np.clip(np.diff(Ma, axis=1), 0, None).sum(0).mean()))
+                         flux=np.clip(np.diff(Ma, axis=1), 0, None).sum(0).mean(), mod4_16=mod_ratio(Ma)))
         if (i + 1) % 100 == 0:
             print(f'{i + 1}/{len(samples)}', flush=True)
     keys = sorted({k for r in rows for k in r}, key=lambda k: (k not in ('utt', 'spk', 'cond'), k))
@@ -240,7 +247,7 @@ def fig(args):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    plt.rcParams['font.family'] = ['Hiragino Sans', 'Noto Sans CJK JP', 'DejaVu Sans']
+    plt.rcParams['font.family'] = ['Hiragino Sans', 'DejaVu Sans']   # 日本語のフォントがある Mac で描く（bands.npz だけあればよい）
     z = np.load(OUT / 'bands.npz')
     hz = z['mel_hz'] / 1000
     fig_, axes = plt.subplots(1, 3, figsize=(10, 3), sharey=True)
