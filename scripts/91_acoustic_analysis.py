@@ -7,7 +7,7 @@ CER による分解（帯域・ケプストラム、論文 4.3 節）は「ど�
 
   feats   test の各発話で、気導音（参照）・各条件の出力から次を求める → results/acoustic/metrics_utt.csv, bands.npz
           - Whisper が実際に見る対数メル（80 帯域、発話ごとに最大値−8 で下限、(x+4)/4）
-          - 区間の種類（気導音から決める）: 無音（最大から 40 dB 以上低い）／有声（自己相関の周期性 > 0.5）／無声
+          - 区間の種類（気導音から決める）: 無音（最大から 40 dB 以上低い）／有声（pYIN の有声判定）／無声
           - 区間ごと・帯域ごとの平均対数メルと、気導音との L1 距離
           - LPC（8 kHz に下げて 10 次）で有声区間の F1〜F3 と帯域幅。気導音とのずれ
           - 気導音の有声区間の基本周波数の中央値（f0_air、話者の声の高さ。山中ら 2026 は女性話者で劣化が大きいと報告）
@@ -68,19 +68,18 @@ def whisper_logmel(x):
 
 
 def frame_classes(air, T):
-    """気導音から各フレーム（10 ms）を 無音 / 有声 / 無声 に分ける"""
+    """気導音から各フレーム（10 ms、Whisper の特徴量と同じ中心位置）を 有声 / 無声 / 無音 に分ける。
+    無音: 最大から 40 dB 以上低い。有声: pYIN（Mauch & Dixon 2014、librosa）の有声判定。F0 も返す"""
+    import librosa
     pad = np.pad(air, (200, 200))
     idx = np.arange(T)[:, None] * 160 + np.arange(400)[None]
     fr = pad[np.minimum(idx, len(pad) - 1)] * np.hanning(400)
     e = 10 * np.log10((fr ** 2).sum(1) + 1e-12)
-    spec = np.fft.rfft(fr, 1024)
-    ac = np.fft.irfft(np.abs(spec) ** 2, 1024)
-    ac = ac / (ac[:, :1] + 1e-12)
-    wac = np.fft.irfft(np.abs(np.fft.rfft(np.hanning(400), 1024)) ** 2, 1024)
-    ac = ac / (wac / wac[0] + 1e-12)[None]   # 窓の自己相関で割る（Boersma 1993、Praat と同じ）
-    per = ac[:, 40:201].max(1)        # 遅れ 2.5〜12.5 ms（80〜400 Hz）の自己相関の最大
-    cls = np.where(e < e.max() - 40, 2, np.where(per > 0.5, 0, 1))
-    f0 = SR / (40 + ac[:, 40:201].argmax(1))   # 有声フレームの基本周波数の目安（Hz）
+    f0, vflag, _ = librosa.pyin(air, fmin=65, fmax=400, sr=SR, frame_length=1024, hop_length=160, center=True)
+    v = np.zeros(T, bool)
+    v[:min(T, len(vflag))] = vflag[:T]
+    f0 = np.pad(np.nan_to_num(f0), (0, max(0, T - len(f0))))[:T]
+    cls = np.where(e < e.max() - 40, 2, np.where(v, 0, 1))
     return cls, f0
 
 
