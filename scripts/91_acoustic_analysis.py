@@ -21,12 +21,21 @@ CER による分解（帯域・ケプストラム、論文 4.3 節）は「ど�
             fm_avg4_eqA_cls  区間の種類（生成×4 自身から判定、気導音は使わない）ごとの固定ゲイン（dev で推定）
             fm_avg4_eqA_utt  発話ごとの固定ゲイン（その発話の融合A を使うオラクル。時間変化だけを除いた対照）
           時間変化する包絡まで移したものは既存の fm_ceps_env（論文 表3「包絡」）
+  temporal  時間方向のどこで融合A が包絡を変えたか（観察）→ results/acoustic/temporal.md
+          気導音の対数メルのフレーム間変化（スペクトル変化の速さ）で、各フレームを 切り替わり（上位 25%）／中間／定常（下位 25%）に分け、
+          さらに有声区間の始まり・終わり（前後 3 フレーム）を区別して、|融合A − 生成×4| と「気導音への近づき方」を区間ごとに比べる
+  tmask   融合を一部のフレームだけに適用した音声（因果の確認、認識は script 66 で）。フレームの選び方は生成×4 の出力自身から決める（気導音は使わない）
+            fm_avg4_tm_trans / fm_avg4_tm_steady  スペクトル変化の速い上位 30% のフレームだけ／それ以外だけ融合A
+            fm_avg4_tm_voiced / fm_avg4_tm_nonv   有声らしいフレーム（2 kHz 未満のエネルギーの割合 > 0.5、無音でない）だけ／それ以外だけ融合A
+          切り替えは 3 フレームの移動平均でなめらかにする。位相はどれも生成×4（融合A と同じ）
 
 使い方（GPU PC、feats / eq は CPU で可、SE 出力が保存されていない条件は SE を GPU で動かす）
     python scripts/91_acoustic_analysis.py feats
     python scripts/91_acoustic_analysis.py report
     python scripts/91_acoustic_analysis.py fig      # Mac で（results/acoustic/bands.npz を持ってきて）
     python scripts/91_acoustic_analysis.py eq
+    python scripts/91_acoustic_analysis.py temporal
+    python scripts/91_acoustic_analysis.py tmask
 """
 
 import argparse
@@ -334,12 +343,96 @@ def eq(args):
     print('done →', ', '.join(str(d) for d in outs.values()))
 
 
+def temporal(args):
+    s64 = import_module('64_retranscribe_all')
+    samples = s64.load_samples('test')[:args.limit or None]
+    names = ['trans', 'mid', 'steady', 'v_onset', 'v_offset', 'silence']
+    acc = {k: defaultdict(list) for k in names}     # 区間 → 指標 → 発話ごとの平均（話者 → 値）
+    for i, s in enumerate(samples):
+        air = sf.read(RAW_DIR / 'acoustic' / 'test' / f"{s['utt']}.wav", dtype='float32')[0]
+        g = sf.read(SE_WAV / 'fm_taps_avg4' / 'test' / f"{s['utt']}.wav", dtype='float32')[0]
+        a = sf.read(SE_WAV / 'fm_avg4_mavg_ce10' / 'test' / f"{s['utt']}.wav", dtype='float32')[0]
+        n = min(len(air), len(g), len(a))
+        R, G, A = (whisper_logmel(x[:n].astype(np.float32)) for x in (air, g, a))
+        T = R.shape[1]
+        cls, _ = frame_classes(air[:n], T)
+        rate = np.r_[0, np.abs(np.diff(R, axis=1)).mean(0)]          # 気導音のスペクトル変化の速さ
+        speech = cls < 2
+        q1, q3 = np.quantile(rate[speech], [0.25, 0.75])
+        v = (cls == 0).astype(int)
+        dv = np.diff(np.r_[0, v, 0])
+        on, off = np.zeros(T, bool), np.zeros(T, bool)
+        for t in np.where(dv[:-1] == 1)[0]:
+            on[max(0, t - 1):t + 3] = True
+        for t in np.where(dv[1:] == -1)[0]:
+            off[max(0, t - 2):t + 2] = True
+        masks = {'trans': speech & (rate >= q3), 'mid': speech & (rate > q1) & (rate < q3), 'steady': speech & (rate <= q1),
+                 'v_onset': on & speech, 'v_offset': off & speech, 'silence': cls == 2}
+        ch = np.abs(A - G).mean(0)                                     # 融合A が変えた量
+        closer = (np.abs(A - R) - np.abs(G - R))                       # 負なら気導音に近づいた
+        for k, m in masks.items():
+            if m.sum() < 3:
+                continue
+            acc[k]['change'].append((s['spk'], ch[m].mean()))
+            acc[k]['closer_all'].append((s['spk'], closer[:, m].mean()))
+            acc[k]['closer_lo'].append((s['spk'], closer[LO][:, m].mean()))
+            acc[k]['closer_hi'].append((s['spk'], closer[~LO][:, m].mean()))
+            acc[k]['share'].append((s['spk'], m.mean()))
+        if (i + 1) % 200 == 0:
+            print(f'{i + 1}/{len(samples)}', flush=True)
+    L = ['# 時間方向のどこで融合A が包絡を変えたか（scripts/91_acoustic_analysis.py temporal）', '',
+         'Whisper の対数メルの単位。change = |融合A − 生成×4| の帯域平均、closer = |融合A − 気導| − |生成×4 − 気導|（負なら気導音に近づいた）。'
+         '区間は気導音から決めた（切り替わり = スペクトル変化の速さが発話内の上位 25%、定常 = 下位 25%、有声の始まり・終わり = 前後 3 フレーム）。p は話者単位（n=10）の Wilcoxon（closer が 0 と違うか）', '',
+         '| 区間 | フレームの割合 | change | closer（全帯域） | closer（4 kHz 未満） | closer（4 kHz 以上） | 近づいた話者 | p |', '|---|---|---|---|---|---|---|---|']
+    for k in names:
+        def spk_mean(key):
+            d = defaultdict(list)
+            for sp, x in acc[k][key]:
+                d[sp].append(x)
+            return np.array([np.mean(d[sp]) for sp in sorted(d)])
+        c = spk_mean('closer_all')
+        p = wilcoxon(c).pvalue if np.any(c != 0) else np.nan
+        L.append(f"| {k} | {spk_mean('share').mean():.2f} | {spk_mean('change').mean():.4f} | {c.mean():+.4f} | "
+                 f"{spk_mean('closer_lo').mean():+.4f} | {spk_mean('closer_hi').mean():+.4f} | {(c < 0).sum()}/{len(c)} | {p:.3g} |")
+    (OUT / 'temporal.md').write_text('\n'.join(L) + '\n', encoding='utf-8')
+    print('\n'.join(L))
+
+
+def tmask(args):
+    s64 = import_module('64_retranscribe_all')
+    win = torch.hann_window(512)
+    stft = lambda x: torch.stft(torch.from_numpy(x), 512, 128, window=win, return_complex=True)
+    outs = {k: SE_WAV / k / 'test' for k in ('fm_avg4_tm_trans', 'fm_avg4_tm_steady', 'fm_avg4_tm_voiced', 'fm_avg4_tm_nonv')}
+    for d in outs.values():
+        d.mkdir(parents=True, exist_ok=True)
+    k3 = np.ones(3) / 3
+    for s in s64.load_samples('test'):
+        g = sf.read(SE_WAV / 'fm_taps_avg4' / 'test' / f"{s['utt']}.wav", dtype='float32')[0]
+        a = sf.read(SE_WAV / 'fm_avg4_mavg_ce10' / 'test' / f"{s['utt']}.wav", dtype='float32')[0]
+        n = min(len(g), len(a))
+        G, A = stft(g[:n]), stft(a[:n])
+        lg = torch.log(G.abs() + 1e-7).numpy()
+        rate = np.r_[0, np.abs(np.diff(lg, axis=1)).mean(0)]           # 生成×4 自身のスペクトル変化の速さ
+        p = (G.abs() ** 2).sum(0).numpy()
+        e = 10 * np.log10(p + 1e-12)
+        speech = e >= e.max() - 40
+        voiced = speech & ((G.abs()[:64] ** 2).sum(0).numpy() / (p + 1e-12) > 0.5)
+        trans = speech & (rate >= np.quantile(rate[speech], 0.7))
+        ms = {'fm_avg4_tm_trans': trans, 'fm_avg4_tm_steady': ~trans, 'fm_avg4_tm_voiced': voiced, 'fm_avg4_tm_nonv': ~voiced}
+        for k, m in ms.items():
+            w = torch.from_numpy(np.convolve(m.astype(float), k3, mode='same')).float()[None]
+            mag = (1 - w) * G.abs() + w * A.abs()
+            y = torch.istft(mag * torch.exp(1j * G.angle()), 512, 128, window=win, length=n)
+            sf.write(outs[k] / f"{s['utt']}.wav", y.numpy().astype(np.float32), SR)
+    print('done →', ', '.join(str(d) for d in outs.values()))
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('stage', choices=['feats', 'report', 'fig', 'eq'])
+    ap.add_argument('stage', choices=['feats', 'report', 'fig', 'eq', 'temporal', 'tmask'])
     ap.add_argument('--limit', type=int, default=0)
     args = ap.parse_args()
-    {'feats': feats, 'report': report, 'fig': fig, 'eq': eq}[args.stage](args)
+    {'feats': feats, 'report': report, 'fig': fig, 'eq': eq, 'temporal': temporal, 'tmask': tmask}[args.stage](args)
 
 
 if __name__ == '__main__':

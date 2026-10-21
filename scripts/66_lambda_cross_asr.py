@@ -154,6 +154,10 @@ ALL_CONDS += SEED_FB
 EQ_A = ['fm_avg4_eqA_dev', 'fm_avg4_eqA_cls', 'fm_avg4_eqA_utt']
 SETS['eq_fuse'] = ['taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_ceps_env'] + EQ_A
 ALL_CONDS += EQ_A
+# script 91 tmask: 融合を一部のフレームだけに適用（切り替わり／定常、有声／それ以外。生成×4 自身で判定）
+TMASK = ['fm_avg4_tm_trans', 'fm_avg4_tm_steady', 'fm_avg4_tm_voiced', 'fm_avg4_tm_nonv']
+SETS['tmask'] = ['fm_taps_avg4', 'fm_avg4_mavg_ce10'] + TMASK
+ALL_CONDS += TMASK
 ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
