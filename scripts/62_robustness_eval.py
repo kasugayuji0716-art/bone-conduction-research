@@ -119,7 +119,7 @@ except ImportError:
 def load_ctc(name, repo):
     from transformers import AutoProcessor, Wav2Vec2ForCTC
     if name.startswith('mms'):
-        lang = 'kor' if _DATASET == 'taps' else 'fra'   # BCR_DATASET=vibravox* のときは仏語のアダプタ
+        lang = 'kor' if _DATASET.startswith('taps') else 'fra'   # BCR_DATASET=vibravox* のときは仏語のアダプタ
         proc = AutoProcessor.from_pretrained(repo, target_lang=lang)
         model = Wav2Vec2ForCTC.from_pretrained(repo, target_lang=lang,
                                                ignore_mismatched_sizes=True)
