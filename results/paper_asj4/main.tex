@@ -1,0 +1,246 @@
+% 日本音響学会 講演論文（4ページ版）の原稿。6ページ版（../paper_asj/main.tex）を、問い「前処理はいつ効き、なぜか」を軸に組み直したもの
+% ビルド: cd results/paper_asj4 && tectonic -X compile main.tex
+% 数値の出典: results/GENERATIVE_RESULTS_2026-09-30.md §6・§7（特に §7.12〜§7.19）、results/review_response/stats_taps.csv
+% 注意: 学会の正式テンプレートではなく、余白（上下18 mm・左右22 mm・段間6 mm）を合わせた自作の書式。投稿時は学会配布のスタイルファイルに載せ替える
+\documentclass[xelatex,ja=standard,a4paper,twocolumn,10pt]{bxjsarticle}
+\geometry{top=18mm,bottom=18mm,left=22mm,right=22mm,columnsep=6mm}
+\setjamainfont[BoldFont={Hiragino Sans W6}]{Hiragino Mincho ProN}
+\setjasansfont[BoldFont={Hiragino Sans W6}]{Hiragino Sans W3}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[font=small,skip=3pt]{caption}
+\usepackage{cite}
+
+\pagestyle{empty}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\floatsep}{6pt plus 2pt minus 2pt}
+
+\makeatletter
+\renewcommand{\section}{\@startsection{section}{1}{\z@}{1.0ex plus .3ex}{.5ex}{\normalfont\large\sffamily\bfseries}}
+\renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}{.7ex plus .2ex}{.3ex}{\normalfont\normalsize\sffamily\bfseries}}
+\makeatother
+
+\newcommand{\figdir}{../figures}
+
+\begin{document}
+
+\twocolumn[{%
+  \begin{center}
+    {\Large\sffamily\bfseries 喉マイク音声の認識に前処理はいつ効くのか\\[2pt]
+      ——事前学習済み生成モデルの適応とASR損失の役割——\footnotemark}\\[8pt]
+    {春日　裕次（明治大学　総合数理学部　先端メディアサイエンス学科）}
+  \end{center}
+  \vspace{6pt}
+}]
+\footnotetext{When does preprocessing help throat-microphone speech recognition? Roles of pretrained generative restoration and ASR-loss enhancement, by KASUGA, Yuji (Meiji University).}
+
+%────────────────────────────────────────
+\section{はじめに}
+喉マイクは頸部の振動を捉えるため環境騒音に強いが、高域や一部の子音の情報が失われる。
+喉マイクと気導マイクの同時収録コーパスTAPS\cite{taps}の喉マイク音声をWhisper-small\cite{whisper}でそのまま認識すると、文字誤り率（CER）は0.447に達する。
+
+前処理としての音声強調（SE）は有力な対策に見えるが、知覚品質の改善が音声認識（ASR）の改善を保証しないことが知られている\cite{ochiai2024}。
+喉マイクでも、学習なしの生成的な帯域拡張や声質変換はCERを悪化させたと報告されている\cite{yamanaka2026}。
+一方、Hauretら\cite{hauret2025rt}は事前学習済みの生成モデルを体内伝導マイクで追加学習し、1種の音素認識器で誤りの大幅な低下を報告した。
+また、凍結したASRの損失で前処理を学習する方法\cite{dissen2024}や、生成型と予測型の出力を融合する方法\cite{shi2024}も提案されている。
+しかし、喉マイクに対して前処理が認識を助けるのはどんな条件か、ASR損失が何を足すのか、それがなぜ効くのかは、複数の認識器で調べられていない。
+
+本稿は、9種の認識器と2つのデータセットでこれを分析し、次の3点を示す。
+(1) 事前学習済みの生成モデルを対象の喉マイクで適応すると、9種すべてでCERが下がり、喉マイク音声で追加学習したWhisperにも上乗せできる。事前学習なし、または別の喉マイクで適応したままでは悪化する。
+(2) Whisperの損失で学習したSEとの融合は、Whisper系に小さな上乗せを足す。上乗せの正体は有声区間における時間変化するスペクトル包絡の変形であり、平均的な音色の違いではない。同じ変形が、系統の異なる認識器には害になりうる。
+(3) 部品は喉マイクの間でどちらの向きにも転移しないが、同じ手順で適応し直せば改善の順序は再現する。
+
+%────────────────────────────────────────
+\section{方法}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.92\columnwidth]{\figdir/method_overview_4p.png}
+  \caption{手法の全体像。喉マイク音声を生成モデルとWhisper用SEの両方に通し、出力の振幅を融合する}
+  \label{fig:overview}
+\end{figure}
+
+\subsection{生成モデルによる復元}
+NVIDIAが公開しているflow matching\cite{lipman2023}型の音声復元モデル\cite{ku2024}を用いる。
+複素STFTを扱う24層のTransformer（4.3億パラメータ）で、英語約6万時間の音声で、マスクした区間を復元するタスクにより事前学習されている。
+これを喉マイク音声を条件、同時収録の気導マイク音声を目標として追加学習する（ASRの損失は用いない）。
+推論では標準正規分布の雑音から出発し、Euler法20ステップで生成する。
+生成は出発点の雑音に依存してばらつくので、$N=4$個のサンプルのSTFT振幅を平均し、位相は1つ目のサンプルのものを用いる（以下、生成×4）。
+
+\subsection{Whisper用SEと振幅融合}
+TAPS論文\cite{taps}が公開しているSE-Conformer\cite{seconformer}（1210万パラメータ、以下TAPS SE）を初期値とし、次の損失で追加学習する（以下CE-SE）。
+\begin{equation}
+  L = L_\mathrm{recon}(\hat{s}, s_\mathrm{air}) + \lambda\, \mathrm{CE}(\mathrm{Whisper}(\hat{s}), y)
+\end{equation}
+$L_\mathrm{recon}$はL1波形損失と多重解像度STFT損失の和、$y$は正解テキストで、Whisper-smallは凍結する。
+生成×4の出力$G$とCE-SEの出力$C$は、STFT（512点、シフト128点）の振幅で融合し、位相は$G$のものを用いる（以下、融合A）。
+\begin{equation}
+  Y = \bigl(0.5\,|G| + 0.5\,|C|\bigr)\, e^{j\angle G}
+\end{equation}
+$\lambda=10$と重み0.5は、devでWhisper-smallのCERのみを見て選んだ。
+
+%────────────────────────────────────────
+\section{実験条件}
+TAPS\cite{taps}（韓国語）の話者独立な分割（train 40話者・dev 10話者・test 10話者、各100発話）を用いた。
+生成モデルはtrainの4,000対で20k step追加学習し、最終ステップの重みを用いた。
+CE-SEは最大50エポック学習し、devの損失でearly stoppingを行った。
+testは話者が学習と重ならないが、収録機器・言語は同じである。
+融合の採用はtestの他の認識器も見て決めたため、TAPS上の分析は探索的である。
+
+認識器は、Whisperと同形式の対数メルを入力とするWhisper系6種（Whisper-small（損失と選択に使用）・base・medium・large-v3-turbo、TAPSの喉マイク音声で追加学習したWhisper-small（FT Whisper）、Qwen3-ASR-1.7B\cite{qwen3asr}）と、系統の異なる3種（波形入力のCTC型であるMMS-1B\cite{mms}とXLSR-53\cite{xlsr}の韓国語版（XLSR）、Zipformer\cite{zipformer}）である。
+CERは句読点を除き、発話ごとに1.0で打ち切って平均した。
+話者ごとの平均CERで両側のWilcoxon符号順位検定を行い、条件の対ごとに認識器をまたいでHolm法で補正した（10話者全員が同じ向きのとき$p\approx0.018$）。
+CE-SEと生成モデルは2回ずつ学習し直して再現性を確かめた。
+
+%────────────────────────────────────────
+\section{実験結果}
+\subsection{前処理が効く条件}
+表\ref{tab:main}に各手法のCERを示す。
+生成モデルは9種すべてでTAPS SEよりCERを下げた（1回の生成でも15〜24\%、10話者全員）。
+喉マイク音声で追加学習したFT Whisperでも、処理なしの0.138から生成×4で0.100、融合Aで0.092（$-33$\%、10話者全員）へ下がり、認識器を喉マイクに適応した後も前処理が効いた。
+一方、同じ構造を同じ量だけ初期値から学習したモデルはWhisper-smallで0.551、別の喉マイク（4.4節のVibraVox）で適応した生成モデルを用いると0.628と、いずれも処理なし（0.447）より悪化した。
+事前学習と、対象の喉マイクでの適応の両方が要る。
+
+\begin{table}[t]
+  \centering
+  \caption{TAPS testのCER。なし: 処理なし、TAPS: TAPS SE、W-FT: FT Whisper、*: 損失・選択に使用}
+  \label{tab:main}
+  \footnotesize
+  \setlength{\tabcolsep}{3.0pt}
+  \begin{tabular}{lccccc}
+    \toprule
+    認識器 & なし & TAPS & CE-SE & 生成×4 & 融合A \\
+    \midrule
+    W-small* & 0.447 & 0.230 & 0.196 & 0.169 & \textbf{0.163} \\
+    W-base & 0.655 & 0.273 & 0.267 & 0.205 & \textbf{0.201} \\
+    W-medium & 0.337 & 0.196 & 0.169 & 0.151 & \textbf{0.144} \\
+    W-turbo & 0.257 & 0.170 & 0.142 & 0.131 & \textbf{0.125} \\
+    W-FT & 0.138 & 0.146 & 0.121 & 0.100 & \textbf{0.092} \\
+    Qwen3 & 0.243 & 0.136 & 0.114 & 0.097 & \textbf{0.094} \\
+    \midrule
+    XLSR & 0.584 & 0.222 & 0.279 & \textbf{0.161} & 0.163 \\
+    MMS-1B & 0.497 & 0.350 & 0.354 & \textbf{0.284} & 0.285 \\
+    Zipformer & 0.997 & 0.542 & 0.791 & \textbf{0.433} & 0.483 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{ASR損失は何を足すか}
+融合Aは、Whisper系6種すべてで生成×4よりCERを下げた（$-1.8$〜$-8.0$\%）。
+small・medium・turbo・FTでは、学習し直した3回とも有意であった。
+CE-SE単体はWhisper系を改善したが、XLSRとZipformerは悪化させた（元の学習で$+26$\%・$+46$\%、学習し直した2回では約$+11$〜$12$\%）。
+
+上乗せが単に2つの出力を平均した効果かを確かめるため、CE損失を用いないSEを同じ方法で融合した（表\ref{tab:ctrl}）。
+TAPS SEや再構成損失のみで追加学習したSE（$\lambda=0$）との融合は、Whisper系で生成×4から$-1.7$〜$+3.1$\%とほぼ改善せず、融合Aはそれより6種すべてで有意に低かった。
+ただし自己教師あり表現の損失で学習したSE（SSL-MSE、Satoら\cite{sato2025}に倣う）との融合でも、turbo・FTでは有意に改善した。
+CE損失による学習は上乗せを大きくするが、必要条件とまではいえない。
+
+\begin{table}[t]
+  \centering
+  \caption{生成×4に融合するSEを変えた対照（CER）。+CEが融合A}
+  \label{tab:ctrl}
+  \footnotesize
+  \setlength{\tabcolsep}{3.0pt}
+  \begin{tabular}{lccccc}
+    \toprule
+    認識器 & 生成×4 & +TAPS & +$\lambda$=0 & +SSL & +CE \\
+    \midrule
+    W-small* & 0.169 & 0.172 & 0.172 & 0.168 & \textbf{0.163} \\
+    W-medium & 0.151 & 0.150 & 0.151 & 0.147 & \textbf{0.144} \\
+    W-turbo & 0.131 & 0.130 & 0.129 & 0.128 & \textbf{0.125} \\
+    W-FT & 0.100 & 0.099 & 0.098 & 0.095 & \textbf{0.092} \\
+    Qwen3 & 0.097 & 0.099 & 0.100 & 0.096 & \textbf{0.094} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{上乗せの正体}
+融合Aが生成×4から何を変えたかを、元の学習のモデルで調べた（表\ref{tab:why}）。
+まず、融合Aとの振幅の差の時間平均をゲインとして生成×4に掛けた。
+devで求めた固定ゲイン、有声・無声・無音ごとのゲイン、その発話の融合Aから求めたゲイン（現実には使えない上限）のいずれも、Whisper系で生成×4から$\pm2$\%以内であった（すべて有意でない）。
+一方、対数振幅の差のうちケプストラム30次未満の包絡だけを、フレームごとに移すと、融合Aの上乗せの58〜100\%が戻った。
+さらに融合を一部のフレームだけに適用すると、有声らしいフレーム（生成×4自身から判定）だけで上乗せの63〜88\%が得られ（Qwen3は融合A以上）、それ以外のフレームだけではどの認識器でも効果がなかった。
+Whisper系への上乗せは、平均的な音色ではなく、有声区間で時間とともに変わる包絡の変形による。
+音響的には、融合Aは生成×4より高域の量やスペクトル傾斜を気導音に近づける一方、フォルマントの帯域幅を広げて気導音から遠ざけた（F3: 生成×4 256~Hz、融合A 338~Hz、気導 247~Hz）。
+ただし、こうした発話ごとの特徴の変化は、Whisper-small・medium・FT・Qwen3のCERの変化と相関せず（$|\rho|<0.08$）、単純な音響量には還元できない。
+
+Zipformerでは逆に、固定ゲインだけで生成×4より3〜4\%改善し（10話者全員）、有声フレームだけの融合で$+12.9$\%と悪化した。
+同じ有声区間の変形が、Whisper系には効き、Zipformerには害になる。
+
+\begin{table}[t]
+  \centering
+  \caption{上乗せの分解（元の学習、CER）。固定: 発話ごとの固定ゲイン（上限）、包絡: 包絡だけをフレームごとに移す、有声／他: その種類のフレームだけ融合}
+  \label{tab:why}
+  \footnotesize
+  \setlength{\tabcolsep}{2.6pt}
+  \begin{tabular}{lcccccc}
+    \toprule
+    認識器 & 生成×4 & 固定 & 包絡 & 有声 & 他 & 融合A \\
+    \midrule
+    W-small* & 0.169 & 0.170 & 0.166 & 0.164 & 0.169 & 0.163 \\
+    W-medium & 0.151 & 0.151 & 0.145 & 0.146 & 0.149 & 0.144 \\
+    W-turbo & 0.131 & 0.132 & 0.125 & 0.126 & 0.131 & 0.125 \\
+    W-FT & 0.100 & 0.100 & 0.094 & 0.095 & 0.099 & 0.092 \\
+    Qwen3 & 0.097 & 0.096 & 0.094 & 0.092 & 0.099 & 0.094 \\
+    \midrule
+    Zipformer & 0.433 & 0.417 & 0.455 & 0.489 & 0.429 & 0.483 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{別の喉マイクでの評価}
+仏語の体内伝導マイクコーパスVibraVox\cite{vibravox}の喉マイク音声（test 3,064発話・21話者、話者はtrainと重ならない）で評価した（表\ref{tab:vbx}）。
+TAPSで学習した部品をそのまま用いると、いずれも処理なしより悪化した。音量と帯域をTAPSにそろえても変わらなかった。
+逆向き（VibraVoxで適応した生成モデルをTAPSに用いる）でも悪化しており（4.1節）、部品はどちらの向きにも転移しない。
+VibraVoxのtrain（20,981対）で同じ手順の適応をやり直すと（$\lambda$、重み、$N$はTAPSの値に固定）、生成×4は処理なしより70〜82\%、融合Aはさらに3〜15\%CERを下げ、改善の順序が再現した。
+TAPSと異なり、CE-SEと融合は仏語のCTC認識器も改善し、他系統への影響はデータセットに依存した。
+生成モデルの適応は、trainの1,000対（約1.3時間、10k step）でも全データ（約26時間、20k step）の改善量の約86\%が得られた（1試行）。
+
+\begin{table}[t]
+  \centering
+  \caption{VibraVox testのCER（仏語）。上段: TAPSの部品のまま、下段: VibraVoxで適応。XLSR・MMSは仏語版（--は未評価）}
+  \label{tab:vbx}
+  \footnotesize
+  \setlength{\tabcolsep}{2.6pt}
+  \begin{tabular}{lccccc}
+    \toprule
+    条件 & W-small & W-turbo & Qwen3 & XLSR & MMS \\
+    \midrule
+    処理なし & 0.422 & 0.270 & 0.242 & 0.275 & 0.258 \\
+    TAPS SE & 0.711 & 0.654 & 0.594 & 0.501 & 0.577 \\
+    生成×4 & 0.559 & 0.497 & 0.454 & -- & -- \\
+    \midrule
+    再構成のみ & 0.256 & 0.163 & 0.154 & 0.163 & 0.187 \\
+    CE-SE & 0.153 & 0.081 & 0.081 & 0.128 & 0.131 \\
+    生成×4 & 0.087 & 0.053 & 0.047 & 0.063 & 0.076 \\
+    融合A & \textbf{0.079} & \textbf{0.045} & \textbf{0.041} & \textbf{0.058} & \textbf{0.067} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+%────────────────────────────────────────
+\section{考察と限界}
+前処理が喉マイク音声の認識を助けるかは、条件で反転する。
+事前学習済みの生成モデルを対象の喉マイクで適応したときは認識器の系統によらず効き、事前学習がないとき、別の喉マイクのままのとき、学習なしの汎用の復元\cite{yamanaka2026}では害になる。
+ASR損失で学習したSEは、その上にWhisper系向けの小さな上乗せを足すもので、その中身は有声区間の包絡の変形であった。
+この変形は気導音に近づく方向ではなく、他系統の認識器への影響はデータセットによって正負が変わった。原因は特定できていない。
+
+限界として、部品は喉マイクごとに対データで適応する必要があり、見たことのない機器への汎化は示せていない。VibraVox内での評価もデータセットとしてはクローズドである。
+融合の計算量も大きい（4.3億パラメータのモデルを20段・4サンプル実行）。
+また、元の学習と学習し直した学習とでは計算環境も異なり、他系統への悪化の大きさは学習ごとに変わった。4.3節の分解は元の学習についての結果である。
+用いた生成モデルの重みは非商用のライセンスである。
+
+%────────────────────────────────────────
+\section{まとめ}
+喉マイク音声の前処理が認識を助ける条件と仕組みを、9種の認識器と2つのデータセットで調べた。
+事前学習済みの生成モデルを対象の喉マイクで適応すると、9種すべての認識器と、喉マイク用に学習したWhisperでもCERが下がった。
+Whisperの損失で学習したSEとの融合はWhisper系に小さな上乗せを足し、その正体は有声区間で時間変化する包絡の変形であった。
+部品は喉マイクの間で転移せず、機器ごとの少量の対データでの適応と、見たことのない機器への汎化が今後の課題である。
+
+\footnotesize
+\let\oldbibitem\bibitem
+\renewcommand{\bibitem}{\setlength{\itemsep}{0pt}\setlength{\parsep}{0pt}\oldbibitem}
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}
