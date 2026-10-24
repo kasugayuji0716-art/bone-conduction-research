@@ -28,6 +28,13 @@ CER による分解（帯域・ケプストラム、論文 4.3 節）は「ど�
             fm_avg4_tm_trans / fm_avg4_tm_steady  スペクトル変化の速い上位 30% のフレームだけ／それ以外だけ融合A
             fm_avg4_tm_voiced / fm_avg4_tm_nonv   有声らしいフレーム（2 kHz 未満のエネルギーの割合 > 0.5、無音でない）だけ／それ以外だけ融合A
           切り替えは 3 フレームの移動平均でなめらかにする。位相はどれも生成×4（融合A と同じ）
+  decomp2 融合A そのものの分解と、組み合わせ・割合の対照（査読 results/reviews/asj_4page_review_2026-10-24.md 指摘1・2）
+            D = log|融合A| − log|生成×4|（フレームごと）、P = ケプストラム 30 次未満を残す射影（包絡）
+            fm_avg4_dAG_env    log|G| + P D         融合A との差の包絡だけをフレームごとに足す
+            fm_avg4_dAG_fine   log|G| + (I − P) D   差の細部だけを足す（env + fine = 融合A の振幅）
+            fm_avg4_dAG_env_v  log|G| + m · P D     包絡の差を、有声らしいフレーム m（tmask と同じ判定）でだけ足す
+            fm_avg4_tm_vshift  有声マスクを発話内で時間方向に巡回シフトしたマスクで融合A（割合と区間の形は同じ、位置だけ変える）
+          あわせて、有声マスクが選ぶフレームの割合と、気導音の pYIN の有声判定との一致を results/acoustic/mask_stats.md に書く
 
 使い方（GPU PC、feats / eq は CPU で可、SE 出力が保存されていない条件は SE を GPU で動かす）
     python scripts/91_acoustic_analysis.py feats
@@ -36,6 +43,7 @@ CER による分解（帯域・ケプストラム、論文 4.3 節）は「ど�
     python scripts/91_acoustic_analysis.py eq
     python scripts/91_acoustic_analysis.py temporal
     python scripts/91_acoustic_analysis.py tmask
+    python scripts/91_acoustic_analysis.py decomp2
 """
 
 import argparse
@@ -427,12 +435,85 @@ def tmask(args):
     print('done →', ', '.join(str(d) for d in outs.values()))
 
 
+def _lifter(K=30, n_fft=512):
+    lift = torch.zeros(n_fft, 1)
+    lift[:K] = 1
+    lift[n_fft - K + 1:] = 1
+    return lift
+
+
+def _env(L, lift, n_fft=512):
+    """(F, T) の対数振幅 → ケプストラムの低次だけを残した包絡"""
+    return torch.fft.rfft(torch.fft.irfft(L, n=n_fft, dim=0) * lift, dim=0).real
+
+
+def _voiced_mask(G):
+    """tmask と同じ「有声らしい」フレーム（無音でなく、2 kHz 未満のエネルギーの割合 > 0.5）"""
+    p = (G.abs() ** 2).sum(0).numpy()
+    e = 10 * np.log10(p + 1e-12)
+    speech = e >= e.max() - 40
+    return speech & ((G.abs()[:64] ** 2).sum(0).numpy() / (p + 1e-12) > 0.5), speech
+
+
+def decomp2(args):
+    import librosa
+    s64 = import_module('64_retranscribe_all')
+    win = torch.hann_window(512)
+    stft = lambda x: torch.stft(torch.from_numpy(x), 512, 128, window=win, return_complex=True)
+    lift = _lifter()
+    names = ('fm_avg4_dAG_env', 'fm_avg4_dAG_fine', 'fm_avg4_dAG_env_v', 'fm_avg4_tm_vshift')
+    outs = {k: SE_WAV / k / 'test' for k in names}
+    for d in outs.values():
+        d.mkdir(parents=True, exist_ok=True)
+    k3 = np.ones(3) / 3
+    rng = np.random.default_rng(0)
+    frac, agree, recall, prec = [], [], [], []
+    samples = s64.load_samples('test')[:args.limit or None]
+    for i, s in enumerate(samples):
+        g = sf.read(SE_WAV / 'fm_taps_avg4' / 'test' / f"{s['utt']}.wav", dtype='float32')[0]
+        a = sf.read(SE_WAV / 'fm_avg4_mavg_ce10' / 'test' / f"{s['utt']}.wav", dtype='float32')[0]
+        n = min(len(g), len(a))
+        G, A = stft(g[:n]), stft(a[:n])
+        LG, LA = torch.log(G.abs() + 1e-7), torch.log(A.abs() + 1e-7)
+        D = LA - LG
+        PD = _env(D, lift)
+        v, speech = _voiced_mask(G)
+        w = torch.from_numpy(np.convolve(v.astype(float), k3, mode='same')).float()[None]
+        sh = np.roll(v, rng.integers(1, len(v))) if len(v) > 1 else v
+        ws = torch.from_numpy(np.convolve(sh.astype(float), k3, mode='same')).float()[None]
+        mags = {'fm_avg4_dAG_env': torch.exp(LG + PD), 'fm_avg4_dAG_fine': torch.exp(LG + D - PD),
+                'fm_avg4_dAG_env_v': torch.exp(LG + w * PD), 'fm_avg4_tm_vshift': (1 - ws) * G.abs() + ws * A.abs()}
+        for k, M in mags.items():
+            if (outs[k] / f"{s['utt']}.wav").exists():
+                continue
+            y = torch.istft(M * torch.exp(1j * G.angle()), 512, 128, window=win, length=n)
+            sf.write(outs[k] / f"{s['utt']}.wav", y.numpy().astype(np.float32), SR)
+        # マスクの中身: 割合と、気導音の pYIN（同じ 128 シフト）との一致
+        air = sf.read(RAW_DIR / 'acoustic' / 'test' / f"{s['utt']}.wav", dtype='float32')[0][:n]
+        _, vf, _ = librosa.pyin(air, fmin=65, fmax=400, sr=SR, frame_length=1024, hop_length=128, center=True)
+        T = min(len(v), len(vf))
+        vv, pv, sp = v[:T], vf[:T].astype(bool), speech[:T]
+        frac.append(vv.mean()); agree.append((vv == pv)[sp].mean())
+        recall.append((vv & pv).sum() / max(1, pv.sum())); prec.append((vv & pv).sum() / max(1, vv.sum()))
+        if (i + 1) % 100 == 0:
+            print(f'{i + 1}/{len(samples)}', flush=True)
+    L = ['# 有声マスク（tmask・decomp2）の中身（scripts/91_acoustic_analysis.py decomp2）', '',
+         '判定: 生成×4 の出力で、無音でなく（最大から 40 dB 以内）、2 kHz 未満のエネルギーの割合が 0.5 を超えるフレーム。比較: 気導音の pYIN の有声判定（同じ 128 シフト）', '',
+         f'- 選ばれるフレームの割合（全フレームに対して）: 平均 {np.mean(frac):.3f}',
+         f'- 無音でないフレームでの pYIN との一致率: {np.mean(agree):.3f}',
+         f'- pYIN で有声のフレームのうちマスクが選んだ割合（再現率）: {np.mean(recall):.3f}',
+         f'- マスクが選んだフレームのうち pYIN でも有声の割合（適合率）: {np.mean(prec):.3f}', f'- 発話数: {len(frac)}']
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / 'mask_stats.md').write_text('\n'.join(L) + '\n', encoding='utf-8')
+    print('\n'.join(L))
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('stage', choices=['feats', 'report', 'fig', 'eq', 'temporal', 'tmask'])
+    ap.add_argument('stage', choices=['feats', 'report', 'fig', 'eq', 'temporal', 'tmask', 'decomp2'])
     ap.add_argument('--limit', type=int, default=0)
     args = ap.parse_args()
-    {'feats': feats, 'report': report, 'fig': fig, 'eq': eq, 'temporal': temporal, 'tmask': tmask}[args.stage](args)
+    {'feats': feats, 'report': report, 'fig': fig, 'eq': eq, 'temporal': temporal, 'tmask': tmask, 'decomp2': decomp2}[args.stage](args)
 
 
 if __name__ == '__main__':

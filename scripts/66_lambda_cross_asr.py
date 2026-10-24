@@ -161,6 +161,10 @@ ALL_CONDS += TMASK
 # script 92: 言語か機器か。疑似喉マイク音声（BCR_DATASET=taps_sim* / vibravox_sim* / vibravox_devreal）に、TAPS と VibraVox で適応した生成モデル（1 回生成）
 SETS['langdev'] = ['no_se', 'g_taps', 'g_vbx']
 ALL_CONDS += ['g_taps', 'g_vbx']
+# script 91 decomp2: 融合A そのものの包絡・細部への分解、包絡×有声フレームの組み合わせ、有声マスクをずらした対照
+DECOMP2 = ['fm_avg4_dAG_env', 'fm_avg4_dAG_fine', 'fm_avg4_dAG_env_v', 'fm_avg4_tm_vshift']
+SETS['decomp2'] = ['fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_avg4_eqA_utt', 'fm_avg4_tm_voiced'] + DECOMP2
+ALL_CONDS += DECOMP2
 ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
