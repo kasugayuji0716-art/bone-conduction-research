@@ -1,0 +1,10 @@
+asr,cond,n,cer_nopunct
+whisper-small,g_taps,1000,0.2219
+whisper-small,g_vbx,1000,0.3165
+whisper-small,no_se,1000,0.1297
+whisper-large-v3-turbo,g_taps,1000,0.1646
+whisper-large-v3-turbo,g_vbx,1000,0.2136
+whisper-large-v3-turbo,no_se,1000,0.1034
+qwen3-asr-1.7b,g_taps,1000,0.1321
+qwen3-asr-1.7b,g_vbx,1000,0.2104
+qwen3-asr-1.7b,no_se,1000,0.077

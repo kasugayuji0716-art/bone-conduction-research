@@ -1,0 +1,4 @@
+asr,cond,n,cer_nopunct
+whisper-small,no_se,841,0.0315
+whisper-large-v3-turbo,no_se,841,0.0159
+qwen3-asr-1.7b,no_se,841,0.0142
