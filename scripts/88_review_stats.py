@@ -57,7 +57,11 @@ if DS.DATASET == 'taps':
                ('fm_taps_avg4', 'fm_avg4_tm_voiced'), ('fm_taps_avg4', 'fm_avg4_tm_nonv'),
                # 融合A そのものの分解と対照（script 91 decomp2）
                ('fm_taps_avg4', 'fm_avg4_dAG_env'), ('fm_taps_avg4', 'fm_avg4_dAG_fine'), ('fm_taps_avg4', 'fm_avg4_dAG_env_v'),
-               ('fm_taps_avg4', 'fm_avg4_tm_vshift'), ('fm_avg4_tm_vshift', 'fm_avg4_tm_voiced'), ('fm_avg4_dAG_env', 'fm_avg4_mavg_ce10')]
+               ('fm_taps_avg4', 'fm_avg4_tm_vshift'), ('fm_avg4_tm_vshift', 'fm_avg4_tm_voiced'), ('fm_avg4_dAG_env', 'fm_avg4_mavg_ce10'),
+               # 計算量の削減（ステップ数・サンプル数）
+               ('fm_taps_avg4', 'fm_taps_s10_avg4'), ('fm_taps_avg4', 'fm_taps_s5_avg4'), ('fm_taps', 'fm_taps_s5_x1'),
+               ('fm_avg4_mavg_ce10', 'fm_s10_avg4_mavg_ce10'), ('fm_avg4_mavg_ce10', 'fm_s5_avg4_mavg_ce10'), ('fm_avg4_mavg_ce10', 'fm_s5_x1_mavg_ce10'),
+               ('taps', 'fm_s5_x1_mavg_ce10')]
     CER_CONDS = ['taps', 'ce10.0', 'ssl_wavlm_0.3', 'fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10', 'wise_a0.7', 'fm_avg4_lmavg_wise',
                  'fm_avg4_mavg_taps', 'fm_avg4_mavg_ce0', 'fm_avg4_mavg_ssl',
                  'ce_s2', 'ce_s3', 'fm_s2_avg4', 'fm_s3_avg4', 'fm_s2_avg4_mavg_ce_s2', 'fm_s3_avg4_mavg_ce_s3']

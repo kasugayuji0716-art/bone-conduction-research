@@ -165,6 +165,10 @@ ALL_CONDS += ['g_taps', 'g_vbx']
 DECOMP2 = ['fm_avg4_dAG_env', 'fm_avg4_dAG_fine', 'fm_avg4_dAG_env_v', 'fm_avg4_tm_vshift']
 SETS['decomp2'] = ['fm_taps_avg4', 'fm_avg4_mavg_ce10', 'fm_avg4_eqA_utt', 'fm_avg4_tm_voiced'] + DECOMP2
 ALL_CONDS += DECOMP2
+# 計算量の削減: 生成のステップ数とサンプル数を減らす（推論のみ、script 75 --steps / --n_avg）と、その出力との融合A
+STEPS = ['fm_taps_s10_avg4', 'fm_taps_s5_avg4', 'fm_taps_s5_x1', 'fm_s10_avg4_mavg_ce10', 'fm_s5_avg4_mavg_ce10', 'fm_s5_x1_mavg_ce10']
+SETS['steps'] = ['fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + STEPS
+ALL_CONDS += STEPS
 ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']
