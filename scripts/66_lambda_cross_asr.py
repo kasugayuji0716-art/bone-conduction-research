@@ -169,6 +169,13 @@ ALL_CONDS += DECOMP2
 STEPS = ['fm_taps_s10_avg4', 'fm_taps_s5_avg4', 'fm_taps_s5_x1', 'fm_s10_avg4_mavg_ce10', 'fm_s5_avg4_mavg_ce10', 'fm_s5_x1_mavg_ce10']
 SETS['steps'] = ['fm_taps', 'fm_taps_avg4', 'fm_avg4_mavg_ce10'] + STEPS
 ALL_CONDS += STEPS
+# VibraVox のセンサー1つ外し（5ステップ・1回の生成）: 喉マイクだけで適応（g5_vbx）、喉マイク以外の4センサーで適応（g5_pool4）、5センサーすべてで適応（g5_pool5）
+LOBO = ['g5_vbx', 'g5_pool4', 'g5_pool5']
+SETS['lobo'] = ['no_se'] + LOBO
+# 少量適応の繰り返し（VibraVox、10k step、20ステップ・1回の生成）: 選び方の乱数を変える（_s1, _s2）、10 人だけから集める（_k10）
+FEW2 = ['fm_vbx_n200_s1_x1', 'fm_vbx_n200_s2_x1', 'fm_vbx_n1000_s1_x1', 'fm_vbx_n1000_s2_x1', 'fm_vbx_n1000_k10_x1', 'fm_vbx_n1000_k10_s1_x1']
+SETS['fewpair2'] = ['no_se'] + VBX_FEW + FEW2   # VBX_FEW に fm_vbx_x1（全データ）を含む
+ALL_CONDS += LOBO + FEW2
 ALL_CONDS += ['no_se'] if 'no_se' not in ALL_CONDS else []
 ALL_CONDS += TRANSFER2 + [f'fm_avg4_mavg_{t}' for t in TRANSFER2]
 ALL_CONDS += WISE + CEPS + TRANSFER + [f'fm_avg4_mavg_{t}' for t in TRANSFER] + ['fm_avg4_mavg_wise']

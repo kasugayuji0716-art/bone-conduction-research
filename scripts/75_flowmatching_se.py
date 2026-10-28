@@ -70,13 +70,42 @@ def fetch_examples():
 
 
 def subset(args):
-    """少ない対データで適応できるかを見るため、train.json から N 対を乱数（種 0）で選ぶ"""
+    """少ない対データで適応できるかを見るため、train.json から N 対を乱数で選ぶ。
+    --subset_seed で選び方の乱数を変える（0 は従来と同じ）。--n_spk K を付けると、まず K 人の話者を選び、その話者の発話から N 対を選ぶ
+    （実際に新しい機器で少人数が録音する場合に近い）。ファイル名は <話者ID>_<文ID>.wav で、話者 ID 自体に _ を含むので右から1回だけ切る"""
     import random
-    lines = open(WORK / 'train.json').read().splitlines()
-    random.Random(0).shuffle(lines)
-    out = WORK / f'train_n{args.n_train}.json'
-    out.write_text('\n'.join(lines[:args.n_train]) + '\n')
-    print(f'{args.n_train} / {len(lines)} pairs → {out}')
+    lines = [x for x in open(WORK / 'train.json').read().splitlines() if x.strip()]
+    rng = random.Random(args.subset_seed)
+    if args.n_spk:
+        spk_of = lambda x: Path(json.loads(x)['noisy_filepath']).stem.rsplit('_', 1)[0]
+        spks = sorted({spk_of(x) for x in lines})
+        keep = set(rng.sample(spks, args.n_spk))
+        lines = [x for x in lines if spk_of(x) in keep]
+    rng.shuffle(lines)
+    name = f'train_n{args.n_train}' + (f'_k{args.n_spk}' if args.n_spk else '') + (f'_s{args.subset_seed}' if args.subset_seed else '')
+    out = WORK / f'{name}.json'
+    sel = lines[:args.n_train]
+    out.write_text('\n'.join(sel) + '\n')
+    print(f'{len(sel)} / {len(lines)} pairs（話者 {len({Path(json.loads(x)["noisy_filepath"]).stem.rsplit("_", 1)[0] for x in sel})} 人） → {out}')
+
+
+def pool(args):
+    """複数の体内伝導センサーをまとめた学習用マニフェスト（VibraVox）。目標はどれも同じ発話のヘッドセット（気導）音声。
+    --channels throat,soft_in_ear,... 。throat は data/raw/vibravox、それ以外は data/raw/vibravox_<ch> の throat/train に置いてある（script 31 --channel）"""
+    import soundfile as sf
+    raw = BASE_DIR / 'data' / 'raw'
+    air = raw / 'vibravox' / 'acoustic' / 'train'
+    out, n = WORK / f'train_pool_{args.pool_name}.json', 0
+    with open(out, 'w') as f:
+        for ch in args.channels.split(','):
+            d = raw / ('vibravox' if ch == 'throat' else f'vibravox_{ch}') / 'throat' / 'train'
+            for t in sorted(d.glob('*.wav')):
+                a = air / t.name
+                if a.exists():
+                    f.write(json.dumps(dict(noisy_filepath=str(t), clean_filepath=str(a), duration=min(sf.info(t).duration, sf.info(a).duration))) + '\n')
+                    n += 1
+            print(f'  {ch}: {d}', flush=True)
+    print(f'{n} pairs → {out}')
 
 
 def train(args):
@@ -163,7 +192,7 @@ def infer(args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('stage', choices=['manifest', 'subset', 'train', 'infer'])
+    ap.add_argument('stage', choices=['manifest', 'subset', 'pool', 'train', 'infer'])
     ap.add_argument('--tag', default='fm_taps')
     ap.add_argument('--max_steps', type=int, default=20000)
     ap.add_argument('--warmup', type=int, default=1000)
@@ -181,8 +210,12 @@ def main():
     ap.add_argument('--train_json', default='', help='train: 学習に使うマニフェスト（WORK 内の名前。既定 train.json）')
     ap.add_argument('--n_train', type=int, default=0, help='subset: train.json から乱数で N 対を選んで train_n<N>.json を作る')
     ap.add_argument('--scratch', action='store_true', help='事前学習なし（初期値ランダム）で学習する対照')
+    ap.add_argument('--subset_seed', type=int, default=0, help='subset: 選び方の乱数（0 は従来と同じ）')
+    ap.add_argument('--n_spk', type=int, default=0, help='subset: まず K 人の話者を選び、その中から N 対を選ぶ')
+    ap.add_argument('--channels', default='', help='pool: まとめるセンサー（カンマ区切り）')
+    ap.add_argument('--pool_name', default='', help='pool: 出力 train_pool_<name>.json')
     args = ap.parse_args()
-    {'manifest': lambda: manifest(), 'subset': lambda: subset(args), 'train': lambda: train(args), 'infer': lambda: infer(args)}[args.stage]()
+    {'manifest': lambda: manifest(), 'subset': lambda: subset(args), 'pool': lambda: pool(args), 'train': lambda: train(args), 'infer': lambda: infer(args)}[args.stage]()
 
 
 if __name__ == '__main__':
