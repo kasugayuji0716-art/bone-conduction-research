@@ -29,3 +29,29 @@
 文章で直したもの: 「失われる」→「乏しい」、疑似音 → 疑似喉マイクにそろえる、λ の定義、Hann 窓、式番号を \eqref に、表1を \ref に、WavLM と pYIN を引用（pyin を refs.bib に追加）、表4・表6のキャプションに略号と太字の意味、認識器には「追加学習」、生成×4 と「1回の生成（N=1）」の区別、図2の作成待ちの分岐を削除
 
 見送ったもの: 4.2節（疑似喉マイク・字母）を後ろへ移す（節番号の参照が多く、構成の判断は著者に残す）、「Whisper系」の改名（Qwen3 を含むことは3章で定義済み）、FT Whisper 単体と前処理付き Whisper-small の比較（認識器が違うため。FT Whisper にも前処理が効くことは4.1節にある）、参考文献の頁番号の補足（原典の確認が要る）
+
+## 2.2節の追加指摘への対応（6ページ版、同日）
+
+- $L_\mathrm{recon}$ を「再構成損失」と結び付け、TAPS SE の学習と同じであると TAPS を引用。多重解像度 STFT 損失は Parallel WaveGAN（Yamamoto ら、ICASSP 2020）を引用し、3 解像度（FFT 512・1024・2048）、spectral convergence と対数振幅 L1 を 0.5 ずつ、平均、と記述（scripts/51_train_se_ce_loss.py の MultiResolutionSTFTLoss で確認）
+- 式(2) を $(1-w)|G| + w|C|$ に。$w$ は CE-SE 側の重みで $w=0.5$（scripts/78_whisper_select.py の --w で確認）。4.5節の「重み」も $w$ に
+- 「凍結」を「重みは更新せず、CE 損失の勾配だけを Whisper を通して SE に伝える」に
+- 4ページ版には未反映
+
+## 定義不足・説明不足の全体確認（同日）
+
+6ページ版に追加（すべてスクリプトまたは結果ファイルで確認）:
+- 生成: flow matching の常微分方程式を Euler 法で解く。学習は 1 バッチ 6.14 秒×8、学習率 1e-4（GENERATIVE_RESULTS §1）
+- TAPS SE: TAPS の train で喉→気導の変換として再構成損失で学習済み
+- CE の中身: 微分可能な対数メル、正解トークン列をデコーダに与えたときの交差エントロピー、言語は韓国語（scripts/51）
+- 16 kHz で扱うこと、TAPS の喉マイクは 8 kHz 収録で 4 kHz 以上を含まないこと
+- CE-SE の学習: 15 秒超を除外、バッチ 4、学習率 3e-4、最大 50 エポック、dev の式(1) の損失で patience 5（scripts/51 の既定値と scripts/53 の起動引数）
+- FT Whisper: 全パラメータ、学習率 1e-5、バッチ 16、dev の CER で最良のエポック（scripts/22）
+- 認識器: MMS は韓国語アダプタ、XLSR は韓国語 fine-tuning の公開モデル、Zipformer は KsponSpeech で学習された transducer。Whisper はビーム 5、CTC と Zipformer は貪欲法、Whisper系は言語指定（scripts/62・64・65）
+- CER の文字は韓国語ではハングルの音節。Zipformer は空白を出さないので CER が高めに出るが、空白除去 CER でも大小関係は同じ（cer_variants_taps.csv）
+- SSL-MSE の重み 0.3 の決め方（再構成損失の約 15 倍、CE-SE の λ=10 と同じ比）と学習条件（最大 15 エポック）
+- 4.4節の「高域のずれ」「スペクトル傾斜」の定義（scripts/91、results/acoustic/report.md）
+- VibraVox: speech_clean、ヘッドセット気導、仏語の正解テキストでの CE
+
+4ページ版: 2.2節の4点（再構成損失と TAPS・Parallel WaveGAN の引用、式(2) の w、勾配の説明）に加え、CE の中身・16 kHz と 8 kHz 収録・Zipformer の空白を短く追加。紙幅のため、4.3節の LPC・傾斜の文（用語が未定義だった）、考察の上乗せの文（まとめと重複）、4.3節 Zipformer 後の重複文を削り、有声マスクの文とはじめに(3)を短くした。4 ページのまま
+
+6ページ版は 8 ページになった（8 ページ目は参考文献の続きのみ）
