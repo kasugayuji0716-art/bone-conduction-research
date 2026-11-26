@@ -94,7 +94,9 @@ def plot_wide(args):
     import matplotlib.pyplot as plt
     d = np.load(NPZ)
     specs, t0 = d['specs'], float(d['t0'])
-    plt.rcParams['font.family'] = 'Hiragino Sans'
+    # 2026-11 先輩の指摘: 英字・数字は Times New Roman。日本語は Hiragino Sans にフォールバックする
+    plt.rcParams['font.family'] = ['Times New Roman', 'Hiragino Sans']
+    plt.rcParams['mathtext.fontset'] = 'stix'
     rows = [(NAMES[0], specs[0]), (NAMES[1], specs[1]), (NAMES[2], specs[2]),
             ('融合 − 生成×4（dB）', diff_masked(specs[1], specs[2])), (NAMES[3], specs[3])]
     fig, axes = plt.subplots(len(rows), 1, figsize=(6.9, 4.6), sharex=True)
